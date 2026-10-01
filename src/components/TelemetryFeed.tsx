@@ -57,24 +57,41 @@ export const TelemetryFeed: React.FC<TelemetryFeedProps> = ({
               </div>
 
               {selectedResult && (
-                <span className={`text-[11px] font-bold ${
-                  selectedResult.lockType === 'FULL_3D_LOCK' || selectedResult.lockType === 'DUAL_PINPOINT_LOCK' || selectedResult.lockType === 'DUAL_KINEMATIC_LOCK' 
-                    ? 'text-emerald-400' 
-                    : 'text-amber-400'
-                }`}>
-                  (Δ {selectedResult.errorMeters}m
-                  {selectedResult.lockType === 'DUAL_PINPOINT_LOCK' && selectedResult.dualInfo && (
-                    <span className="text-slate-300 font-normal">
-                      {' '}| Match: <b className="text-cyan-300">+{selectedResult.dualInfo.candidate1VectorAlignment}</b> | Ghost: <b className="text-rose-400 font-bold">Δ {selectedResult.dualInfo.candidate2ErrorMeters}m</b>
+                <div className="flex items-center gap-2">
+                  {selectedResult.lockType === 'BLIND_ZONE' && selectedResult.borderExit ? (
+                    <span className="text-[11px] font-bold text-rose-400 bg-rose-500/10 px-2 py-0.5 rounded border border-rose-500/30 font-mono">
+                      📍 BLIND ZONE (LKP Exit: {selectedResult.borderExit.exitSpeedMps}m/s @ {Math.round(selectedResult.borderExit.exitHeadingDeg)}°, T-{selectedResult.borderExit.elapsedSeconds}s ago)
+                    </span>
+                  ) : (
+                    <span className={`text-[11px] font-bold ${
+                      selectedResult.lockType === 'FULL_3D_LOCK' || selectedResult.lockType === 'DUAL_PINPOINT_LOCK' || selectedResult.lockType === 'DUAL_KINEMATIC_LOCK' 
+                        ? 'text-emerald-400' 
+                        : 'text-amber-400'
+                    }`}>
+                      (Δ {selectedResult.errorMeters}m
+                      {selectedResult.lockType === 'DUAL_PINPOINT_LOCK' && selectedResult.dualInfo && (
+                        <span className="text-slate-300 font-normal">
+                          {' '}| Match: <b className="text-cyan-300">+{selectedResult.dualInfo.candidate1VectorAlignment}</b> | Ghost: <b className="text-rose-400 font-bold">Δ {selectedResult.dualInfo.candidate2ErrorMeters}m</b>
+                        </span>
+                      )}
+                      {selectedResult.lockType === 'DUAL_KINEMATIC_LOCK' && selectedResult.dualInfo && (
+                        <span className="text-slate-400 font-normal">
+                          {' '}| Mirror Ghost: <b className="text-rose-400 font-bold">Δ {selectedResult.dualInfo.candidate2ErrorMeters}m</b>
+                        </span>
+                      )}
+                      )
                     </span>
                   )}
-                  {selectedResult.lockType === 'DUAL_KINEMATIC_LOCK' && selectedResult.dualInfo && (
-                    <span className="text-slate-400 font-normal">
-                      {' '}| Mirror Ghost: <b className="text-rose-400 font-bold">Δ {selectedResult.dualInfo.candidate2ErrorMeters}m</b>
-                    </span>
+
+                  {selectedResult && (
+                    <div className="flex items-center gap-1.5 px-2 py-0.5 rounded bg-blue-500/10 border border-blue-500/20 text-[11px] font-mono">
+                      <span className="text-slate-400">Speed:</span>
+                      <span className="text-cyan-300">Act <b>{selectedDog.speedMps ?? selectedResult.actualSpeedMps ?? 0} m/s</b></span>
+                      <span className="text-slate-500">|</span>
+                      <span className="text-emerald-300">Pred <b>{selectedResult.speedMps ?? 0} m/s</b></span>
+                    </div>
                   )}
-                  )
-                </span>
+                </div>
               )}
               <button
                 onClick={() => onToggleImuResting(selectedDog.id)}
@@ -122,6 +139,7 @@ export const TelemetryFeed: React.FC<TelemetryFeedProps> = ({
                 <th className="pb-1.5">Dorsal Heading</th>
                 <th className="pb-1.5">Lock Status</th>
                 <th className="pb-1.5">Anchors Heard</th>
+                <th className="pb-1.5">Speed (Act / Pred)</th>
                 <th className="pb-1.5">GDOP</th>
                 <th className="pb-1.5">Est. Deviation (Error)</th>
                 <th className="pb-1.5">IMU Motion State</th>
@@ -152,7 +170,7 @@ export const TelemetryFeed: React.FC<TelemetryFeedProps> = ({
                         </span>
                       ) : res?.lockType === 'DUAL_PINPOINT_LOCK' ? (
                         <span className="inline-flex items-center gap-1 text-cyan-300 bg-cyan-500/10 px-2 py-0.5 rounded border border-cyan-500/30 text-[10px]">
-                          <CheckCircle2 size={11} className="text-cyan-400" /> 2-Anchor Pinpoint
+                          <CheckCircle2 size={11} className="text-cyan-400" /> Fused 2-Anchor Lock
                           {res.dualInfo && (
                             <span className="text-emerald-300 ml-1 font-mono">
                               (Match: +{res.dualInfo.candidate1VectorAlignment} | Ghost: Δ{res.dualInfo.outcastLeapMeters}m)
@@ -192,6 +210,11 @@ export const TelemetryFeed: React.FC<TelemetryFeedProps> = ({
                     </td>
                     <td className="py-1.5 font-semibold text-cyan-300">
                       {res?.contributingAnchorIds.length || 0} Anchors
+                    </td>
+                    <td className="py-1.5 font-mono text-[10px]">
+                      <span className="text-cyan-300 font-semibold">{tag.speedMps ?? res?.actualSpeedMps ?? 0}</span>
+                      <span className="text-slate-500"> / </span>
+                      <span className="text-emerald-400 font-semibold">{res?.speedMps ?? 0} m/s</span>
                     </td>
                     <td className="py-1.5">
                       {res ? res.gdop : '—'}

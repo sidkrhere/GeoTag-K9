@@ -50,6 +50,7 @@ export interface GeoTag {
   compassData?: CompassHeadingData;
   autoWalk: boolean;
   imuResting: boolean;        // IMU resting state
+  speedMps?: number;          // Live physical velocity in m/s
   batteryPct: number;
   color: string;
   pathWaypoints?: Point2D[];
@@ -74,6 +75,8 @@ export interface SignalMeasurement {
   obstructed: boolean;
   numObstructions: number;
   isOutlier?: boolean;
+  weight?: number;
+  isNlosZeroWeighted?: boolean;
 }
 
 export type LockType =
@@ -85,6 +88,16 @@ export type LockType =
   | 'DUAL_AMBIGUITY'
   | 'RADIAL_RING'
   | 'BLIND_ZONE';
+
+export interface BorderExitInfo {
+  lastKnownPos: Point2D;
+  exitVelocity: Point2D;
+  exitHeadingDeg: number;
+  exitSpeedMps: number;
+  exitTimestamp: number;
+  elapsedSeconds: number;
+  previousAnchorCount: number;
+}
 
 export interface DualCandidateInfo {
   candidate1: Point2D;
@@ -103,6 +116,24 @@ export interface DualCandidateInfo {
   compassHeadingDeg?: number;
   transitionDelayMs?: number;
   isTransitionBuffering?: boolean;
+  candidate1Score?: number;
+  candidate2Score?: number;
+  candidate1DistMeters?: number;
+  candidate2DistMeters?: number;
+  kinematicWeight?: number;
+  compassWeight?: number;
+}
+
+export interface HistoricalFix {
+  x: number;
+  y: number;
+  timestamp: number;
+  vx: number;
+  vy: number;
+  speedMps: number;
+  lockType: LockType;
+  errorMeters: number;
+  headingDeg?: number;
 }
 
 export interface TrilaterationResult {
@@ -115,8 +146,14 @@ export interface TrilaterationResult {
   outlierAnchorIds?: string[];
   dualCandidates?: [Point2D, Point2D];
   dualInfo?: DualCandidateInfo;
+  borderExit?: BorderExitInfo;
   hypothesisFlipDetected?: boolean;
   velocity?: Point2D;
+  speedMps?: number;
+  actualSpeedMps?: number;
+  historyTrail?: HistoricalFix[];
+  historicalVelocity?: Point2D;
+  covarianceTrace?: number;
   headingDeg?: number;
   timestamp?: number;
   radialRing?: {
@@ -142,6 +179,7 @@ export interface SimulationConfig {
   showTrueDoggos: boolean;
   showEstimatedLocations: boolean;
   showHeadingVisionCone: boolean; // Canine forward radar / vision arc
+  showHistoricalBreadcrumbs: boolean; // Historical trajectory tail
   imuSensorType: ImuSensorType;   // 'ECOMPASS_9DOF' or 'ACCEL_ONLY'
 }
 
@@ -152,4 +190,13 @@ export type ActiveTool =
   | 'ADD_TIER1_STOP'
   | 'ADD_TIER2_STOP'
   | 'ADD_GEOCENTRE';
+
+export interface LapMetrics {
+  currentLapNumber: number;
+  currentLapAvgError: number;
+  lastCompletedLapAvgError: number | null;
+  lifetimeAvgError: number;
+  currentLapSamples: number;
+  totalSamples: number;
+}
 

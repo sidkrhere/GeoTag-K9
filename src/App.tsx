@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { TopToolbar } from './components/TopToolbar';
 import { ConfigPanel } from './components/ConfigPanel';
+import { TelemetryHUD } from './components/TelemetryHUD';
 import { TelemetryFeed } from './components/TelemetryFeed';
 import { SimulationCanvas } from './components/SimulationCanvas';
 import {
@@ -11,7 +12,8 @@ import {
   GeoStop,
   GeoCentre,
   GeoTag,
-  TrilaterationResult
+  TrilaterationResult,
+  LapMetrics
 } from './types/simulation';
 import { getIITRoparPreset } from './engine/presetLayouts';
 
@@ -19,6 +21,17 @@ export const App: React.FC = () => {
   const [activeTool, setActiveTool] = useState<ActiveTool>('SELECT_MOVE');
   const [autoWalk, setAutoWalk] = useState<boolean>(true);
   const [selectedEntityId, setSelectedEntityId] = useState<string | null>(null);
+  const [resetKey, setResetKey] = useState<number>(0);
+
+  // Lap & Lifetime Error Tracking
+  const [lapMetrics, setLapMetrics] = useState<LapMetrics>({
+    currentLapNumber: 1,
+    currentLapAvgError: 0,
+    lastCompletedLapAvgError: null,
+    lifetimeAvgError: 0,
+    currentLapSamples: 0,
+    totalSamples: 0
+  });
 
   // Simulation parameters & sliders
   const [config, setConfig] = useState<SimulationConfig>({
@@ -35,6 +48,7 @@ export const App: React.FC = () => {
     showTrueDoggos: true,
     showEstimatedLocations: true,
     showHeadingVisionCone: true,
+    showHistoricalBreadcrumbs: true,
     imuSensorType: 'ECOMPASS_9DOF'
   });
 
@@ -74,6 +88,15 @@ export const App: React.FC = () => {
       setDogPath([]);
     }
     setSelectedEntityId(null);
+    setResetKey(k => k + 1);
+    setLapMetrics({
+      currentLapNumber: 1,
+      currentLapAvgError: 0,
+      lastCompletedLapAvgError: null,
+      lifetimeAvgError: 0,
+      currentLapSamples: 0,
+      totalSamples: 0
+    });
   };
 
   const handleClearAll = () => {
@@ -83,6 +106,15 @@ export const App: React.FC = () => {
     setTags([]);
     setDogPath([]);
     setSelectedEntityId(null);
+    setResetKey(k => k + 1);
+    setLapMetrics({
+      currentLapNumber: 1,
+      currentLapAvgError: 0,
+      lastCompletedLapAvgError: null,
+      lifetimeAvgError: 0,
+      currentLapSamples: 0,
+      totalSamples: 0
+    });
   };
 
   const handleDeleteSelected = () => {
@@ -117,14 +149,19 @@ export const App: React.FC = () => {
         onClearPath={() => setDogPath([])}
       />
 
-      {/* 2. Top-Right Real-Time Config HUD & Sliders */}
-      <ConfigPanel
-        config={config}
-        setConfig={setConfig}
+      {/* 2. Top-Left Pure Real-Time Telemetry HUD */}
+      <TelemetryHUD
         trilaterationResults={trilaterationResults}
         tier1Count={stops.filter(s => s.tier === 1).length}
         tier2Count={stops.filter(s => s.tier === 2).length}
         dogCount={tags.length}
+        lapMetrics={lapMetrics}
+      />
+
+      {/* 3. Top-Right Sliders & Simulation Controls */}
+      <ConfigPanel
+        config={config}
+        setConfig={setConfig}
       />
 
       {/* 3. Main Interactive Canvas Engine */}
@@ -146,6 +183,8 @@ export const App: React.FC = () => {
         selectedEntityId={selectedEntityId}
         setSelectedEntityId={setSelectedEntityId}
         onTrilaterationUpdate={setTrilaterationResults}
+        onLapMetricsUpdate={setLapMetrics}
+        resetKey={resetKey}
       />
 
       {/* 4. Bottom Real-Time Telemetry Logs */}

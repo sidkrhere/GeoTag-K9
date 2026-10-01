@@ -8,13 +8,14 @@ import {
   SimulationConfig, 
   ActiveTool, 
   TrilaterationResult,
-  SignalMeasurement
+  SignalMeasurement,
+  LapMetrics
 } from '../types/simulation';
 import { distance } from '../engine/geometry';
 import { calculateSignalMeasurement } from '../engine/rfPropagation';
 import { solveTrilateration, resetDogTrajectory } from '../engine/multilateration';
 
-export function getCardinalDirection(deg: number): 'N' | 'NE' | 'E' | 'SE' | 'S' | 'SW' | 'W' | 'NW' {
+function getCardinalDirection(deg: number): 'N' | 'NE' | 'E' | 'SE' | 'S' | 'SW' | 'W' | 'NW' {
   const norm = ((deg % 360) + 360) % 360;
   if (norm >= 337.5 || norm < 22.5) return 'N';
   if (norm < 67.5) return 'NE';
@@ -44,6 +45,8 @@ interface SimulationCanvasProps {
   selectedEntityId: string | null;
   setSelectedEntityId: (id: string | null) => void;
   onTrilaterationUpdate: (results: TrilaterationResult[]) => void;
+  onLapMetricsUpdate?: (metrics: LapMetrics) => void;
+  resetKey?: number;
 }
 
 export const SimulationCanvas: React.FC<SimulationCanvasProps> = ({
@@ -63,7 +66,9 @@ export const SimulationCanvas: React.FC<SimulationCanvasProps> = ({
   autoWalk,
   selectedEntityId,
   setSelectedEntityId,
-  onTrilaterationUpdate
+  onTrilaterationUpdate,
+  onLapMetricsUpdate,
+  resetKey
 }) => {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
 
@@ -103,6 +108,51 @@ export const SimulationCanvas: React.FC<SimulationCanvasProps> = ({
     transitionStartTime: number;
   }>>(new Map());
 
+  const onLapMetricsUpdateRef = useRef(onLapMetricsUpdate);
+  onLapMetricsUpdateRef.current = onLapMetricsUpdate;
+
+  // Real-time error & lap accumulator
+  const lapTrackerRef = useRef<{
+    currentLapNumber: number;
+    currentLapErrorSum: number;
+    currentLapSamples: number;
+    lastCompletedLapAvgError: number | null;
+    lifetimeErrorSum: number;
+    lifetimeSamples: number;
+    lastEmittedTime: number;
+  }>({
+    currentLapNumber: 1,
+    currentLapErrorSum: 0,
+    currentLapSamples: 0,
+    lastCompletedLapAvgError: null,
+    lifetimeErrorSum: 0,
+    lifetimeSamples: 0,
+    lastEmittedTime: 0
+  });
+
+  // Reset lap metrics whenever preset or layout is cleared/reset
+  useEffect(() => {
+    lapTrackerRef.current = {
+      currentLapNumber: 1,
+      currentLapErrorSum: 0,
+      currentLapSamples: 0,
+      lastCompletedLapAvgError: null,
+      lifetimeErrorSum: 0,
+      lifetimeSamples: 0,
+      lastEmittedTime: 0
+    };
+    if (onLapMetricsUpdateRef.current) {
+      onLapMetricsUpdateRef.current({
+        currentLapNumber: 1,
+        currentLapAvgError: 0,
+        lastCompletedLapAvgError: null,
+        lifetimeAvgError: 0,
+        currentLapSamples: 0,
+        totalSamples: 0
+      });
+    }
+  }, [resetKey, dogPath.length === 0]);
+
   // Compute live signals and multilateration
   const computeNetworkState = useCallback(() => {
     const stopsMap = new Map<string, GeoStop>(stops.map(s => [s.id, s]));
@@ -124,6 +174,43 @@ export const SimulationCanvas: React.FC<SimulationCanvasProps> = ({
     }
 
     onTrilaterationUpdate(results);
+
+    // Accumulate error for primary dog (Bruno) when locked
+    const primaryRes = results.find(r => r.tagId === tags[0]?.id) || results[0];
+    if (
+      primaryRes &&
+      (primaryRes.lockType === 'FULL_3D_LOCK' ||
+       primaryRes.lockType === 'DUAL_PINPOINT_LOCK' ||
+       primaryRes.lockType === 'DUAL_KINEMATIC_LOCK') &&
+      typeof primaryRes.errorMeters === 'number' &&
+      !isNaN(primaryRes.errorMeters)
+    ) {
+      const tracker = lapTrackerRef.current;
+      tracker.currentLapErrorSum += primaryRes.errorMeters;
+      tracker.currentLapSamples += 1;
+      tracker.lifetimeErrorSum += primaryRes.errorMeters;
+      tracker.lifetimeSamples += 1;
+
+      const now = performance.now();
+      if (now - tracker.lastEmittedTime >= 250) {
+        tracker.lastEmittedTime = now;
+        if (onLapMetricsUpdateRef.current) {
+          onLapMetricsUpdateRef.current({
+            currentLapNumber: tracker.currentLapNumber,
+            currentLapAvgError: tracker.currentLapSamples > 0
+              ? Math.round((tracker.currentLapErrorSum / tracker.currentLapSamples) * 100) / 100
+              : 0,
+            lastCompletedLapAvgError: tracker.lastCompletedLapAvgError,
+            lifetimeAvgError: tracker.lifetimeSamples > 0
+              ? Math.round((tracker.lifetimeErrorSum / tracker.lifetimeSamples) * 100) / 100
+              : 0,
+            currentLapSamples: tracker.currentLapSamples,
+            totalSamples: tracker.lifetimeSamples
+          });
+        }
+      }
+    }
+
     return { results, allSignals };
   }, [tags, stops, buildings, config, onTrilaterationUpdate]);
 
@@ -161,6 +248,31 @@ export const SimulationCanvas: React.FC<SimulationCanvasProps> = ({
             newVx = (ndx / ndist) * stepSpeed;
             newVy = (ndy / ndist) * stepSpeed;
             nextWaypointIdx = nextIdx;
+
+            // Check if dog completed a lap around the perimeter circuit!
+            // When reaching Turn #1 (wpIdx === 0 && nextIdx === 1) after traversing all legs:
+            if (wpIdx === 0 && nextIdx === 1 && tag.id === tags[0]?.id) {
+              const tracker = lapTrackerRef.current;
+              if (tracker.currentLapSamples > 15) {
+                tracker.lastCompletedLapAvgError = Math.round((tracker.currentLapErrorSum / tracker.currentLapSamples) * 100) / 100;
+                tracker.currentLapNumber += 1;
+                tracker.currentLapErrorSum = 0;
+                tracker.currentLapSamples = 0;
+
+                if (onLapMetricsUpdateRef.current) {
+                  onLapMetricsUpdateRef.current({
+                    currentLapNumber: tracker.currentLapNumber,
+                    currentLapAvgError: 0,
+                    lastCompletedLapAvgError: tracker.lastCompletedLapAvgError,
+                    lifetimeAvgError: tracker.lifetimeSamples > 0
+                      ? Math.round((tracker.lifetimeErrorSum / tracker.lifetimeSamples) * 100) / 100
+                      : 0,
+                    currentLapSamples: 0,
+                    totalSamples: tracker.lifetimeSamples
+                  });
+                }
+              }
+            }
           } else {
             newVx = (dx / dist) * stepSpeed;
             newVy = (dy / dist) * stepSpeed;
@@ -208,6 +320,8 @@ export const SimulationCanvas: React.FC<SimulationCanvasProps> = ({
         const cardinal = getCardinalDirection(newHeading);
         const dorsalRad = (newHeading * Math.PI) / 180;
         const nowMs = Date.now();
+        const stepDistPix = Math.hypot(newVx, newVy);
+        const actualSpeedMps = Math.round((stepDistPix / 0.033 / config.pixelsPerMeter) * 10) / 10;
 
         return {
           ...tag,
@@ -216,6 +330,7 @@ export const SimulationCanvas: React.FC<SimulationCanvasProps> = ({
           y: newY,
           vx: newVx,
           vy: newVy,
+          speedMps: actualSpeedMps,
           headingDeg: Math.round(newHeading * 10) / 10,
           compassData: {
             headingDeg: Math.round(newHeading * 10) / 10,
@@ -400,7 +515,11 @@ export const SimulationCanvas: React.FC<SimulationCanvasProps> = ({
           ctx.moveTo(tag.x, tag.y);
           ctx.lineTo(stop.x, stop.y);
 
-          if (sig.isOutlier) {
+          if (sig.isNlosZeroWeighted) {
+            ctx.strokeStyle = 'rgba(239, 68, 68, 0.9)'; // Red dashed slash line for zero-weighted 15" wall anchor!
+            ctx.lineWidth = 2.5;
+            ctx.setLineDash([4, 6]);
+          } else if (sig.isOutlier) {
             ctx.strokeStyle = 'rgba(245, 158, 11, 0.85)'; // Yellow dashed line for outlier anchor!
             ctx.lineWidth = 2;
             ctx.setLineDash([3, 5]);
@@ -421,16 +540,36 @@ export const SimulationCanvas: React.FC<SimulationCanvasProps> = ({
           // Mid-beam RSSI badge
           const midX = (tag.x + stop.x) / 2;
           const midY = (tag.y + stop.y) / 2;
-          const badgeWidth = sig.isOutlier ? 88 : 44;
-          ctx.fillStyle = 'rgba(10, 13, 20, 0.85)';
+          
+          let badgeText = `${sig.rssiDbm}dBm`;
+          let badgeWidth = 46;
+          let badgeColor = '#94a3b8';
+          let borderColor = 'rgba(255, 255, 255, 0.2)';
+
+          if (sig.isNlosZeroWeighted) {
+            badgeText = `${sig.rssiDbm}dBm [15" NLOS - WEIGHT 0]`;
+            badgeWidth = 152;
+            badgeColor = '#ef4444';
+            borderColor = '#ef4444';
+          } else if (sig.isOutlier) {
+            badgeText = `${sig.rssiDbm}dBm [OUTLIER]`;
+            badgeWidth = 88;
+            badgeColor = '#fbbf24';
+            borderColor = '#f59e0b';
+          } else if (sig.obstructed) {
+            badgeColor = '#f87171';
+            borderColor = '#ef4444';
+          }
+
+          ctx.fillStyle = 'rgba(10, 13, 20, 0.88)';
           ctx.fillRect(midX - badgeWidth / 2, midY - 9, badgeWidth, 16);
-          ctx.strokeStyle = sig.isOutlier ? '#f59e0b' : sig.obstructed ? '#ef4444' : 'rgba(255, 255, 255, 0.2)';
+          ctx.strokeStyle = borderColor;
           ctx.strokeRect(midX - badgeWidth / 2, midY - 9, badgeWidth, 16);
 
-          ctx.fillStyle = sig.isOutlier ? '#fbbf24' : sig.obstructed ? '#f87171' : '#94a3b8';
+          ctx.fillStyle = badgeColor;
           ctx.font = '500 9px monospace';
           ctx.textAlign = 'center';
-          ctx.fillText(sig.isOutlier ? `${sig.rssiDbm}dBm [OUTLIER]` : `${sig.rssiDbm}dBm`, midX, midY + 3);
+          ctx.fillText(badgeText, midX, midY + 3);
         }
       }
 
@@ -778,11 +917,60 @@ export const SimulationCanvas: React.FC<SimulationCanvasProps> = ({
           const dist = Math.sqrt(dx * dx + dy * dy);
 
           if (dist > 0.05) {
-            const normalStep = dist * 0.45;
-            const maxStepPerFrame = 8.0; // ~2.85m/frame at 60 FPS (easily tracks fast sprint & turns)
-            const actualStep = Math.min(normalStep, maxStepPerFrame);
+            const normalStep = dist * 0.55;
+            const maxStepPerFrame = Math.max(16.0, (config.autoWalkSpeed ?? 1.5) * 8.0);
+            const actualStep = dist > 20.0 ? Math.min(dist * 0.75, maxStepPerFrame * 2.5) : Math.min(normalStep, maxStepPerFrame);
             displayPos.x += (dx / dist) * actualStep;
             displayPos.y += (dy / dist) * actualStep;
+          }
+
+          // B0. HISTORICAL TRAJECTORY BREADCRUMB TAIL
+          if (config.showHistoricalBreadcrumbs && res.historyTrail && res.historyTrail.length >= 2) {
+            const trail = res.historyTrail;
+            ctx.save();
+
+            // 1. Connect fixes with fading trajectory line
+            ctx.beginPath();
+            ctx.moveTo(trail[0].x, trail[0].y);
+            for (let i = 1; i < trail.length; i++) {
+              ctx.lineTo(trail[i].x, trail[i].y);
+            }
+            ctx.strokeStyle = 'rgba(0, 242, 254, 0.25)';
+            ctx.lineWidth = 2;
+            ctx.setLineDash([3, 4]);
+            ctx.stroke();
+            ctx.setLineDash([]);
+
+            // 2. Render progressive glowing breadcrumb nodes
+            for (let i = 0; i < trail.length; i++) {
+              const fix = trail[i];
+              const progress = (i + 1) / trail.length;
+              const dotRadius = 1.8 + progress * 2.5; // 1.8px (oldest) to 4.3px (latest)
+              const alpha = 0.15 + progress * 0.75;  // 0.15 (oldest) to 0.90 (latest)
+
+              let color = `rgba(16, 185, 129, ${alpha})`; // Emerald for 3D lock
+              if (fix.lockType === 'DUAL_PINPOINT_LOCK') {
+                color = `rgba(0, 242, 254, ${alpha})`; // Cyan for Pinpoint
+              } else if (fix.lockType === 'DUAL_KINEMATIC_LOCK' || fix.lockType === 'DUAL_AMBIGUOUS_CHORD' || fix.lockType === 'RADIAL_RING') {
+                color = `rgba(245, 158, 11, ${alpha})`; // Amber for 2-anchor kinematic / ring
+              } else if (fix.lockType === 'BLIND_ZONE') {
+                color = `rgba(244, 63, 94, ${alpha})`; // Rose for Blind zone
+              }
+
+              // Halo glow
+              ctx.beginPath();
+              ctx.arc(fix.x, fix.y, dotRadius + 2.0, 0, Math.PI * 2);
+              ctx.fillStyle = color.replace(/[\d.]+\)$/, `${alpha * 0.3})`);
+              ctx.fill();
+
+              // Solid center dot
+              ctx.beginPath();
+              ctx.arc(fix.x, fix.y, dotRadius, 0, Math.PI * 2);
+              ctx.fillStyle = color;
+              ctx.fill();
+            }
+
+            ctx.restore();
           }
 
           // B1. EXACT 1-ANCHOR RADIAL UNCERTAINTY RING
@@ -864,14 +1052,14 @@ export const SimulationCanvas: React.FC<SimulationCanvasProps> = ({
             const chordText = dualInfo?.isTransitionBuffering
               ? `⏱️ Transition Buffer (120ms Vector Match) | Chord: ${separationM}m`
               : isPinpoint
-              ? `🧭 2-Anchor Pinpoint Lock (Chord: ${separationM}m | Ghost Error: Δ${ghostErrM}m)`
+              ? `🧭 Fused 2-Anchor Lock (Chord: ${separationM}m | Ghost Error: Δ${ghostErrM}m)`
               : res.lockType === 'DUAL_KINEMATIC_LOCK' 
               ? `Chord: ${separationM}m | Ghost Error: Δ${ghostErrM}m` 
               : res.lockType === 'DUAL_AMBIGUOUS_CHORD'
               ? `⚡ Baseline Crossing (${separationM}m)`
               : `Awaiting 2nd Packet (Syncing)`;
 
-            const badgeWidth = isPinpoint ? 280 : res.lockType === 'DUAL_KINEMATIC_LOCK' ? 220 : 170;
+            const badgeWidth = isPinpoint ? 290 : res.lockType === 'DUAL_KINEMATIC_LOCK' ? 220 : 170;
             ctx.fillStyle = 'rgba(10, 13, 20, 0.90)';
             ctx.fillRect(midChordX - badgeWidth / 2, midChordY - 8, badgeWidth, 16);
             ctx.strokeStyle = isPinpoint ? '#00f2fe' : res.lockType === 'DUAL_KINEMATIC_LOCK' ? '#10b981' : '#f59e0b';
@@ -1011,7 +1199,7 @@ export const SimulationCanvas: React.FC<SimulationCanvasProps> = ({
                 const valAlignText = valAlign !== undefined ? ` | Match: ${(valAlign >= 0 ? '+' : '') + valAlign.toFixed(2)}` : '';
                 ctx.fillStyle = 'rgba(10, 13, 20, 0.9)';
                 const valLabel = isPinpoint 
-                  ? `🧭 Pinpoint Lock (Δ ${res.errorMeters}m${valAlignText})`
+                  ? `🧭 Fused Lock (Δ ${res.errorMeters}m${valAlignText})`
                   : `🎯 2-Anchor Lock (Δ ${res.errorMeters}m)`;
                 const valBadgeW = isPinpoint ? 210 : 160;
                 ctx.fillRect(vx - valBadgeW / 2, vy - 24, valBadgeW, 16);
@@ -1088,6 +1276,87 @@ export const SimulationCanvas: React.FC<SimulationCanvasProps> = ({
             ctx.textAlign = 'center';
             ctx.fillText(res.hypothesisFlipDetected ? '🔄 3D LOCK (FLIP RE-ALIGNED)' : `3D LOCK #${tag.id.slice(-2)}`, estX, estY - 14);
           }
+        } else if (config.showEstimatedLocations && res && res.lockType === 'BLIND_ZONE' && res.borderExit) {
+          // B4. BLIND ZONE: 0-ANCHOR BORDER EXIT WITH LAST KNOWN POSITION (LKP) & VELOCITY VECTOR
+          const lkp = res.borderExit.lastKnownPos;
+          const exitSpeedMps = res.borderExit.exitSpeedMps;
+          const elapsedSec = res.borderExit.elapsedSeconds;
+          const headingDeg = res.borderExit.exitHeadingDeg;
+
+          // 1. Expanding dashed uncertainty horizon ring
+          const uncertRadius = Math.max(16, Math.min(180, elapsedSec * exitSpeedMps * config.pixelsPerMeter));
+          ctx.beginPath();
+          ctx.arc(lkp.x, lkp.y, uncertRadius, 0, Math.PI * 2);
+          ctx.strokeStyle = `rgba(239, 68, 68, ${Math.max(0.15, 0.45 - elapsedSec * 0.03)})`;
+          ctx.lineWidth = 1.5;
+          ctx.setLineDash([4, 4]);
+          ctx.stroke();
+          ctx.setLineDash([]);
+
+          // 2. Pulsing Border Beacon at Last Known Position
+          const beaconPulse = 0.5 + Math.sin(pulsePhaseRef.current * 1.5) * 0.5;
+          ctx.beginPath();
+          ctx.arc(lkp.x, lkp.y, 8 + beaconPulse * 4, 0, Math.PI * 2);
+          ctx.fillStyle = `rgba(239, 68, 68, ${0.25 + beaconPulse * 0.25})`;
+          ctx.fill();
+
+          ctx.beginPath();
+          ctx.arc(lkp.x, lkp.y, 5, 0, Math.PI * 2);
+          ctx.fillStyle = '#ef4444';
+          ctx.fill();
+          ctx.strokeStyle = '#ffffff';
+          ctx.lineWidth = 2;
+          ctx.stroke();
+
+          // 3. Directional Velocity Vector Arrow at Border Exit
+          const velLength = Math.max(28, Math.min(85, exitSpeedMps * 18));
+          const exitRad = ((headingDeg - 90) * Math.PI) / 180;
+          const tipX = lkp.x + Math.cos(exitRad) * velLength;
+          const tipY = lkp.y + Math.sin(exitRad) * velLength;
+
+          ctx.beginPath();
+          ctx.moveTo(lkp.x, lkp.y);
+          ctx.lineTo(tipX, tipY);
+          ctx.strokeStyle = '#f59e0b'; // Amber velocity vector arrow
+          ctx.lineWidth = 3;
+          ctx.stroke();
+
+          // Arrowhead at velocity tip
+          const arrowHead = 7;
+          const leftAngle = exitRad + Math.PI * 0.82;
+          const rightAngle = exitRad - Math.PI * 0.82;
+          ctx.beginPath();
+          ctx.moveTo(tipX, tipY);
+          ctx.lineTo(tipX + Math.cos(leftAngle) * arrowHead, tipY + Math.sin(leftAngle) * arrowHead);
+          ctx.lineTo(tipX + Math.cos(rightAngle) * arrowHead, tipY + Math.sin(rightAngle) * arrowHead);
+          ctx.closePath();
+          ctx.fillStyle = '#f59e0b';
+          ctx.fill();
+
+          // Velocity vector label
+          const labelMidX = (lkp.x + tipX) / 2;
+          const labelMidY = (lkp.y + tipY) / 2;
+          ctx.fillStyle = 'rgba(10, 13, 20, 0.9)';
+          ctx.fillRect(labelMidX - 35, labelMidY - 18, 70, 14);
+          ctx.strokeStyle = '#f59e0b';
+          ctx.strokeRect(labelMidX - 35, labelMidY - 18, 70, 14);
+
+          ctx.fillStyle = '#fbbf24';
+          ctx.font = '600 8px monospace';
+          ctx.textAlign = 'center';
+          ctx.fillText(`v_exit: ${exitSpeedMps}m/s`, labelMidX, labelMidY - 8);
+
+          // 4. Prominent LKP Warning Badge
+          ctx.fillStyle = 'rgba(10, 13, 20, 0.92)';
+          ctx.fillRect(lkp.x - 70, lkp.y - 28, 140, 18);
+          ctx.strokeStyle = '#ef4444';
+          ctx.lineWidth = 1.5;
+          ctx.strokeRect(lkp.x - 70, lkp.y - 28, 140, 18);
+
+          ctx.fillStyle = '#f87171';
+          ctx.font = 'bold 9px monospace';
+          ctx.textAlign = 'center';
+          ctx.fillText(`📍 LKP (T-${elapsedSec}s | θ=${Math.round(headingDeg)}°)`, lkp.x, lkp.y - 16);
         }
       }
 
@@ -1308,6 +1577,11 @@ export const SimulationCanvas: React.FC<SimulationCanvasProps> = ({
     if (draggedEntity.type === 'TAG') {
       const newX = mouseX - draggedEntity.offsetX;
       const newY = mouseY - draggedEntity.offsetY;
+
+      // Keep Kalman Filter and unified display coordinate synchronized with live drag
+      resetDogTrajectory(draggedEntity.id, { x: newX, y: newY });
+      unifiedDisplayCoordRef.current.set(draggedEntity.id, { x: newX, y: newY });
+
       setTags(prev => prev.map(t => {
         if (t.id !== draggedEntity.id) return t;
         const dx = newX - t.x;

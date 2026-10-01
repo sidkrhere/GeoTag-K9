@@ -95,3 +95,33 @@ export function findNearestPoint(
 export function signedCrossProduct(a: Point2D, b: Point2D, p: Point2D): number {
   return (b.x - a.x) * (p.y - a.y) - (b.y - a.y) * (p.x - a.x);
 }
+
+/**
+ * Checks if a point is deeply inside a closed polygon (at least minDepthPixels away from all boundary edges).
+ * Points within minDepthPixels of an exterior wall are treated as perimeter sidewalk jitter.
+ */
+export function isDeepInsidePolygon(point: Point2D, polygon: Point2D[], minDepthPixels: number = 10): boolean {
+  if (!isPointInPolygon(point, polygon)) return false;
+  if (minDepthPixels <= 0) return true;
+
+  for (let i = 0, j = polygon.length - 1; i < polygon.length; j = i++) {
+    const a = polygon[j];
+    const b = polygon[i];
+    const l2 = (b.x - a.x) * (b.x - a.x) + (b.y - a.y) * (b.y - a.y);
+    let distToSeg = 0;
+    if (l2 === 0) {
+      distToSeg = distance(point, a);
+    } else {
+      let t = ((point.x - a.x) * (b.x - a.x) + (point.y - a.y) * (b.y - a.y)) / l2;
+      t = Math.max(0, Math.min(1, t));
+      const projX = a.x + t * (b.x - a.x);
+      const projY = a.y + t * (b.y - a.y);
+      distToSeg = Math.hypot(point.x - projX, point.y - projY);
+    }
+    if (distToSeg < minDepthPixels) {
+      return false;
+    }
+  }
+
+  return true;
+}

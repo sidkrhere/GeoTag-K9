@@ -9,41 +9,27 @@ import {
   EyeOff, 
   Zap,
   ShieldAlert,
-  Compass
+  Compass,
+  Footprints
 } from 'lucide-react';
-import { SimulationConfig, TrilaterationResult } from '../types/simulation';
+import { SimulationConfig } from '../types/simulation';
 
 interface ConfigPanelProps {
   config: SimulationConfig;
   setConfig: React.Dispatch<React.SetStateAction<SimulationConfig>>;
-  trilaterationResults: TrilaterationResult[];
-  tier1Count: number;
-  tier2Count: number;
-  dogCount: number;
 }
 
 export const ConfigPanel: React.FC<ConfigPanelProps> = ({
   config,
-  setConfig,
-  trilaterationResults,
-  tier1Count,
-  tier2Count,
-  dogCount
+  setConfig
 }) => {
   const [isExpanded, setIsExpanded] = useState(true);
 
-  // Compute live average error across locked dogs
-  const lockedResults = trilaterationResults.filter(r => r.lockType === 'FULL_3D_LOCK');
-  const avgError = lockedResults.length > 0 
-    ? Math.round((lockedResults.reduce((acc, r) => acc + r.errorMeters, 0) / lockedResults.length) * 10) / 10
-    : 0;
-
-  const avgGdop = lockedResults.length > 0
-    ? Math.round((lockedResults.reduce((acc, r) => acc + r.gdop, 0) / lockedResults.length) * 10) / 10
-    : 0;
-
   return (
-    <aside aria-label="Configuration & Network HUD" className="glass-panel fixed top-20 right-4 z-20 w-80 rounded-2xl border border-white/10 shadow-2xl transition-all duration-300 overflow-hidden">
+    <aside 
+      aria-label="Simulation Controls & Sliders" 
+      className="glass-panel fixed top-20 right-4 z-20 w-80 rounded-2xl border border-white/10 shadow-2xl transition-all duration-300 overflow-hidden"
+    >
       {/* Header Bar */}
       <div 
         onClick={() => setIsExpanded(!isExpanded)}
@@ -52,47 +38,18 @@ export const ConfigPanel: React.FC<ConfigPanelProps> = ({
         <div className="flex items-center gap-2 text-white">
           <Sliders size={16} className="text-cyan-400" />
           <h2 className="font-display font-semibold text-xs tracking-wider uppercase">
-            Network Config & HUD
+            Simulation Controls
           </h2>
         </div>
-        <div className="flex items-center gap-2">
-          {lockedResults.length > 0 && (
-            <span className="flex items-center gap-1 text-[11px] font-mono text-emerald-400 bg-emerald-500/10 px-2 py-0.5 rounded-full border border-emerald-500/20">
-              <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-ping" />
-              {lockedResults.length} Locked
-            </span>
-          )}
-          <button className="text-slate-400 hover:text-white">
-            {isExpanded ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
-          </button>
-        </div>
+        <button className="text-slate-400 hover:text-white" aria-label="Toggle Controls Panel">
+          {isExpanded ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
+        </button>
       </div>
 
       {isExpanded && (
         <div className="p-4 space-y-4 max-h-[calc(100vh-140px)] overflow-y-auto">
-          {/* Real-Time Metric Telemetry Banner */}
-          <div className="grid grid-cols-2 gap-2 p-2.5 rounded-xl bg-black/40 border border-white/5 font-mono text-[11px]">
-            <div className="p-2 rounded-lg bg-white/5">
-              <span className="text-slate-400 block text-[9px] uppercase tracking-wider">Avg Error</span>
-              <span className={`text-base font-bold ${avgError < 3 ? 'text-emerald-400' : avgError < 7 ? 'text-amber-400' : 'text-rose-400'}`}>
-                {lockedResults.length > 0 ? `${avgError} m` : 'No Lock'}
-              </span>
-            </div>
-            <div className="p-2 rounded-lg bg-white/5">
-              <span className="text-slate-400 block text-[9px] uppercase tracking-wider">Constellation GDOP</span>
-              <span className={`text-base font-bold ${avgGdop < 2.5 ? 'text-emerald-400' : 'text-cyan-400'}`}>
-                {lockedResults.length > 0 ? avgGdop : '—'}
-              </span>
-            </div>
-            <div className="col-span-2 flex items-center justify-between px-2 pt-1 text-slate-400 text-[10px]">
-              <span>T1 Poles: <b className="text-cyan-300 font-bold">{tier1Count}</b></span>
-              <span>T2 Eateries: <b className="text-amber-300 font-bold">{tier2Count}</b></span>
-              <span>Tags (Dogs): <b className="text-emerald-300 font-bold">{dogCount}</b></span>
-            </div>
-          </div>
-
           {/* Section 1: Radii Sliders */}
-          <div className="space-y-3 pt-1 border-t border-white/5">
+          <div className="space-y-3">
             <h3 className="text-[11px] font-semibold text-slate-300 uppercase tracking-wider flex items-center gap-1.5">
               <Activity size={13} className="text-cyan-400" />
               GeoStop Ping Radii
@@ -184,7 +141,31 @@ export const ConfigPanel: React.FC<ConfigPanelProps> = ({
             </div>
           </div>
 
-          {/* Section 3: Visualization Layers */}
+          {/* Section 3: Canine Motion Dynamics */}
+          <div className="space-y-3 pt-2 border-t border-white/5">
+            <h3 className="text-[11px] font-semibold text-slate-300 uppercase tracking-wider flex items-center gap-1.5">
+              <Footprints size={13} className="text-emerald-400" />
+              Canine Wander Speed
+            </h3>
+
+            <div className="space-y-1">
+              <div className="flex justify-between text-xs">
+                <span className="text-slate-300">Simulation Walk Speed:</span>
+                <span className="font-mono text-emerald-400 font-bold">{config.autoWalkSpeed}x</span>
+              </div>
+              <input
+                type="range"
+                min="0.5"
+                max="4.0"
+                step="0.1"
+                value={config.autoWalkSpeed}
+                onChange={(e) => setConfig(prev => ({ ...prev, autoWalkSpeed: Number(e.target.value) }))}
+              />
+              <span className="text-[10px] text-slate-500 block">DVB-KF velocity cap scales automatically with speed</span>
+            </div>
+          </div>
+
+          {/* Section 4: Visualization Layers */}
           <div className="space-y-2 pt-2 border-t border-white/5">
             <h3 className="text-[11px] font-semibold text-slate-300 uppercase tracking-wider flex items-center gap-1.5">
               <Layers size={13} className="text-purple-400" />
@@ -251,10 +232,22 @@ export const ConfigPanel: React.FC<ConfigPanelProps> = ({
                 <span>Canine Vision Cone 🧭 (60° FOV)</span>
                 {config.showHeadingVisionCone ? <Eye size={14} /> : <EyeOff size={14} />}
               </button>
+
+              <button
+                onClick={() => setConfig(prev => ({ ...prev, showHistoricalBreadcrumbs: !prev.showHistoricalBreadcrumbs }))}
+                className={`flex items-center justify-between p-2 rounded-xl border transition-colors col-span-2 ${
+                  config.showHistoricalBreadcrumbs 
+                    ? 'bg-emerald-500/10 border-emerald-500/30 text-emerald-300' 
+                    : 'bg-white/5 border-white/5 text-slate-400'
+                }`}
+              >
+                <span>History Breadcrumbs Trail (15 Fixes)</span>
+                {config.showHistoricalBreadcrumbs ? <Eye size={14} /> : <EyeOff size={14} />}
+              </button>
             </div>
           </div>
 
-          {/* Section 4: Collar Sensor Fusion Profile */}
+          {/* Section 5: Collar Sensor Fusion Profile */}
           <div className="space-y-2 pt-2 border-t border-white/5">
             <h3 className="text-[11px] font-semibold text-slate-300 uppercase tracking-wider flex items-center justify-between">
               <span className="flex items-center gap-1.5">
