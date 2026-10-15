@@ -223,8 +223,10 @@ export function solveTrilateration(
 ): TrilaterationResult {
   const now = Date.now();
 
-  // Dynamically compute maxSpeedMps scaled proportionally with simulation speed
-  const simMaxSpeedMps = Math.max(45.0, (config.autoWalkSpeed ?? 1.5) * 32.0);
+  // Canine biological kinematic ceiling: provide full dynamic bandwidth (15.0 m/s ceiling)
+  // so the filter is never velocity-starved regardless of user speed setting or transient catch-up.
+  const canineTargetSpeedMps = config.autoWalkSpeed ?? 2.5;
+  const simMaxSpeedMps = Math.max(15.0, canineTargetSpeedMps * 1.5);
 
   // Retrieve or initialize the Dynamic Velocity-Bounded Kalman Filter for this canine
   let kf = kalmanFilterMap.get(tag.id);
@@ -235,10 +237,10 @@ export function solveTrilateration(
     kf.setMaxSpeedMps(simMaxSpeedMps);
   }
 
-  // Live actual dog speed in meters per second
-  const actualSpeedMps = tag.speedMps !== undefined 
-    ? tag.speedMps 
-    : Math.round((Math.hypot(tag.vx, tag.vy) / 0.033 / config.pixelsPerMeter) * 10) / 10;
+  // Live actual dog speed in meters per second (dt = 50ms interval)
+  const actualSpeedMps = tag.speedMps !== undefined
+    ? tag.speedMps
+    : Math.round((Math.hypot(tag.vx, tag.vy) / 0.050 / config.pixelsPerMeter) * 10) / 10;
 
   const prior = lastConfirmedFixMap.get(tag.id);
   const headingDeg = tag.headingDeg ?? 90;

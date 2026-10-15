@@ -41,7 +41,7 @@ export const App: React.FC = () => {
     wallAttenuationDb: 12,
     pathLossExponent: 3.0,
     pixelsPerMeter: 2.8,
-    autoWalkSpeed: 1.2,
+    autoWalkSpeed: 2.5, // Nominal K9 Patrol Trot (2.5 m/s = 9.0 km/h)
     showRFRipples: true,
     showBackhaulBeams: true,
     showCoverageHalos: true,
@@ -135,8 +135,11 @@ export const App: React.FC = () => {
   };
 
   return (
-    <div className="relative w-screen h-screen overflow-hidden bg-[#0a0d14] text-slate-100 select-none">
-      {/* 1. Top Control Bar */}
+    <div className="relative w-screen h-screen overflow-hidden bg-[#010602] text-[#00ff41] select-none font-mono">
+      {/* 1950s CRT Scanline & Vignette Tube Filter */}
+      <div className="crt-overlay" />
+
+      {/* 1. Top Control Bar (Master Switchboard) */}
       <TopToolbar
         activeTool={activeTool}
         setActiveTool={setActiveTool}
@@ -149,7 +152,7 @@ export const App: React.FC = () => {
         onClearPath={() => setDogPath([])}
       />
 
-      {/* 2. Top-Left Pure Real-Time Telemetry HUD */}
+      {/* 2. Top-Left Tactical Display Unit (TDU) */}
       <TelemetryHUD
         trilaterationResults={trilaterationResults}
         tier1Count={stops.filter(s => s.tier === 1).length}
@@ -158,13 +161,13 @@ export const App: React.FC = () => {
         lapMetrics={lapMetrics}
       />
 
-      {/* 3. Top-Right Sliders & Simulation Controls */}
+      {/* 3. Top-Right Analog RF Calibration Rack */}
       <ConfigPanel
         config={config}
         setConfig={setConfig}
       />
 
-      {/* 3. Main Interactive Canvas Engine */}
+      {/* 4. Center Plan Position Indicator (PPI) Radar Scope Canvas */}
       <SimulationCanvas
         activeTool={activeTool}
         setActiveTool={setActiveTool}
@@ -187,7 +190,7 @@ export const App: React.FC = () => {
         resetKey={resetKey}
       />
 
-      {/* 4. Bottom Real-Time Telemetry Logs */}
+      {/* 5. Bottom Military Teleprinter / Intercept Feed */}
       <TelemetryFeed
         results={trilaterationResults}
         tags={tags}

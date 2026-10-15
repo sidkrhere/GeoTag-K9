@@ -1,5 +1,4 @@
 import React, { useState } from 'react';
-import { Terminal, ChevronUp, ChevronDown, CheckCircle2, AlertTriangle, XCircle, Trash2, Moon, Sun, Compass } from 'lucide-react';
 import { TrilaterationResult, GeoTag } from '../types/simulation';
 
 interface TelemetryFeedProps {
@@ -25,248 +24,178 @@ export const TelemetryFeed: React.FC<TelemetryFeedProps> = ({
   const selectedResult = results.find(r => r.tagId === selectedTagId);
 
   return (
-    <footer className="glass-panel fixed bottom-3 left-4 right-4 z-20 rounded-2xl border border-white/10 shadow-2xl transition-all duration-300">
-      {/* Summary Bar */}
-      <div className="flex items-center justify-between px-4 py-2.5">
+    <footer className="radar-panel fixed bottom-3 left-4 right-4 z-20 font-mono text-[#00ff41]">
+      {/* 1950s Teleprinter Summary Bar */}
+      <div className="flex items-center justify-between px-3 py-2 text-xs bg-[#020b04]">
         <div className="flex items-center gap-3">
-          <div className="flex items-center gap-2 text-slate-300 font-mono text-xs">
-            <Terminal size={14} className="text-cyan-400" />
-            <span className="font-semibold text-white">GeoCentre Core Feed</span>
-            <span className="text-slate-500">|</span>
-            <span>Active Nodes: <b className="text-cyan-300">{tags.length} Doggos</b></span>
+          <div className="flex items-center gap-2">
+            <span className="text-[10px] px-1.5 py-0.5 border border-[#00f2fe] bg-[#001f22] text-[#00f2fe] font-bold">
+              SIGINT-FEED
+            </span>
+            <span className="font-bold text-[#00f2fe] glow-cyan">GEOCENTRE MASTER TELEPRINTER</span>
+            <span className="text-[#00551a]">|</span>
+            <span className="text-[#00aa33]">ACTIVE TRACKS: <b className="text-[#00f2fe]">{tags.length}</b></span>
           </div>
 
           {selectedDog && (
-            <div className="flex items-center gap-2 pl-3 border-l border-white/10 font-mono text-xs">
-              <span className="text-slate-400">Inspecting:</span>
-              <span className="text-white font-bold">{selectedDog.name}</span>
-              
-              {/* Dorsal e-Compass Spine Heading Widget */}
-              <div className="flex items-center gap-1.5 px-2 py-0.5 rounded bg-cyan-500/10 border border-cyan-500/20 text-cyan-300 text-[11px] font-mono">
-                <Compass 
-                  size={12} 
-                  className="text-cyan-400 transition-transform duration-200" 
-                  style={{ transform: `rotate(${selectedDog.headingDeg ?? 90}deg)` }}
-                />
-                <span>
-                  {Math.round(selectedDog.headingDeg ?? 90)}° {selectedDog.compassData?.cardinal ?? 'E'}
-                </span>
-                <span className="text-[9px] text-cyan-400/70 font-sans">
-                  (Dorsal Spine)
-                </span>
+            <div className="flex items-center gap-2 pl-3 border-l border-[#00551a] text-[11px]">
+              <span className="text-[#00aa33]">TARGET:</span>
+              <span className="text-[#00f2fe] font-bold glow-cyan">{selectedDog.name.toUpperCase()}</span>
+
+              {/* Dorsal Azimuth Dial */}
+              <div className="px-1.5 py-0.5 border border-[#007780] bg-[#001418] text-[#00f2fe] text-[10px]">
+                AZ: {Math.round(selectedDog.headingDeg ?? 90)}° {selectedDog.compassData?.cardinal ?? 'E'} (DORSAL)
               </div>
 
               {selectedResult && (
                 <div className="flex items-center gap-2">
                   {selectedResult.lockType === 'BLIND_ZONE' && selectedResult.borderExit ? (
-                    <span className="text-[11px] font-bold text-rose-400 bg-rose-500/10 px-2 py-0.5 rounded border border-rose-500/30 font-mono">
-                      📍 BLIND ZONE (LKP Exit: {selectedResult.borderExit.exitSpeedMps}m/s @ {Math.round(selectedResult.borderExit.exitHeadingDeg)}°, T-{selectedResult.borderExit.elapsedSeconds}s ago)
+                    <span className="text-[10px] border border-[#ff3b30] bg-[#220705] text-[#ff3b30] px-1.5 py-0.5 font-bold glow-red">
+                      [BLIND ZONE // LKP BRG {Math.round(selectedResult.borderExit.exitHeadingDeg)}° // VEL {selectedResult.borderExit.exitSpeedMps}M/S]
                     </span>
                   ) : (
-                    <span className={`text-[11px] font-bold ${
-                      selectedResult.lockType === 'FULL_3D_LOCK' || selectedResult.lockType === 'DUAL_PINPOINT_LOCK' || selectedResult.lockType === 'DUAL_KINEMATIC_LOCK' 
-                        ? 'text-emerald-400' 
-                        : 'text-amber-400'
-                    }`}>
-                      (Δ {selectedResult.errorMeters}m
+                    <span className="text-[10px] border border-[#00551a] px-1.5 py-0.5">
+                      <span className={selectedResult.errorMeters < 3 ? 'text-[#00ff41]' : selectedResult.errorMeters < 7 ? 'text-[#ff9900]' : 'text-[#ff3b30]'}>
+                        Δ {selectedResult.errorMeters}M
+                      </span>
                       {selectedResult.lockType === 'DUAL_PINPOINT_LOCK' && selectedResult.dualInfo && (
-                        <span className="text-slate-300 font-normal">
-                          {' '}| Match: <b className="text-cyan-300">+{selectedResult.dualInfo.candidate1VectorAlignment}</b> | Ghost: <b className="text-rose-400 font-bold">Δ {selectedResult.dualInfo.candidate2ErrorMeters}m</b>
+                        <span className="text-[#00f2fe]">
+                          {' '}| MATCH: +{selectedResult.dualInfo.candidate1VectorAlignment} | <span className="text-[#ff3b30]">GHOST: Δ{selectedResult.dualInfo.candidate2ErrorMeters}M</span>
                         </span>
                       )}
                       {selectedResult.lockType === 'DUAL_KINEMATIC_LOCK' && selectedResult.dualInfo && (
-                        <span className="text-slate-400 font-normal">
-                          {' '}| Mirror Ghost: <b className="text-rose-400 font-bold">Δ {selectedResult.dualInfo.candidate2ErrorMeters}m</b>
+                        <span className="text-[#ff9900]">
+                          {' '}| <span className="text-[#ff3b30]">GHOST: Δ{selectedResult.dualInfo.candidate2ErrorMeters}M</span>
                         </span>
                       )}
-                      )
                     </span>
                   )}
 
-                  {selectedResult && (
-                    <div className="flex items-center gap-1.5 px-2 py-0.5 rounded bg-blue-500/10 border border-blue-500/20 text-[11px] font-mono">
-                      <span className="text-slate-400">Speed:</span>
-                      <span className="text-cyan-300">Act <b>{selectedDog.speedMps ?? selectedResult.actualSpeedMps ?? 0} m/s</b></span>
-                      <span className="text-slate-500">|</span>
-                      <span className="text-emerald-300">Pred <b>{selectedResult.speedMps ?? 0} m/s</b></span>
-                    </div>
-                  )}
+                  <div className="px-1.5 py-0.5 border border-[#00551a] bg-[#010903] text-[10px]">
+                    <span className="text-[#008826]">VEL: </span>
+                    <span className="text-[#00f2fe] font-bold">ACT {selectedDog.speedMps ?? selectedResult.actualSpeedMps ?? 0}</span>
+                    <span className="text-[#00551a]"> / </span>
+                    <span className="text-[#00ff41] font-bold">KF {selectedResult.speedMps ?? 0} M/S</span>
+                  </div>
                 </div>
               )}
+
               <button
                 onClick={() => onToggleImuResting(selectedDog.id)}
-                title="Toggle IMU Rest State (Sleep / Motion)"
-                className={`flex items-center gap-1 px-2 py-0.5 rounded text-[11px] font-medium transition-colors ${selectedDog.imuResting
-                    ? 'bg-purple-500/20 text-purple-300 border border-purple-500/30'
-                    : 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/30'
-                  }`}
+                title="Toggle IMU Target Harness State (Standby / Moving)"
+                className={`radar-key ${selectedDog.imuResting ? 'radar-key-orange radar-key-active' : 'radar-key-cyan'} text-[10px] py-0.5 px-2`}
               >
-                {selectedDog.imuResting ? <Moon size={11} /> : <Sun size={11} />}
-                {selectedDog.imuResting ? 'IMU Resting (Sleeping)' : 'IMU Active (Running)'}
+                <span>{selectedDog.imuResting ? 'HARNESS: DORMANT' : 'HARNESS: ENGAGED'}</span>
               </button>
             </div>
           )}
         </div>
 
-        <div className="flex items-center gap-3">
+        <div className="flex items-center gap-2">
           {hasSelection && (
             <button
               onClick={onDeleteSelected}
-              className="flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-medium text-rose-300 bg-rose-500/10 hover:bg-rose-500/20 border border-rose-500/30 transition-colors"
+              className="radar-key radar-key-red text-[10px] py-1"
             >
-              <Trash2 size={13} />
-              <span>Delete Node</span>
+              <span>PURGE TARGET</span>
             </button>
           )}
 
           <button
             onClick={() => setIsOpen(!isOpen)}
-            className="flex items-center gap-1 text-xs text-slate-400 hover:text-white transition-colors"
+            className="radar-key radar-key-cyan text-[10px] py-1"
           >
-            <span>{isOpen ? 'Collapse Logs' : 'View Packets'}</span>
-            {isOpen ? <ChevronDown size={14} /> : <ChevronUp size={14} />}
+            <span>{isOpen ? 'COLLAPSE LOG' : 'EXPAND TELEPRINTER'}</span>
           </button>
         </div>
       </div>
 
-      {/* Expanded Live Telemetry Table */}
+      {/* Expanded Military Teleprinter Log Table */}
       {isOpen && (
-        <div className="p-4 pt-1 border-t border-white/10 max-h-48 overflow-y-auto font-mono text-[11px]">
+        <div className="p-3 border-t border-[#003310] max-h-48 overflow-y-auto text-[10px] bg-[#010903]">
           <table className="w-full text-left">
             <thead>
-              <tr className="text-slate-500 border-b border-white/5 text-[10px] uppercase">
-                <th className="pb-1.5">Tag ID / Dog</th>
-                <th className="pb-1.5">Dorsal Heading</th>
-                <th className="pb-1.5">Lock Status</th>
-                <th className="pb-1.5">Anchors Heard</th>
-                <th className="pb-1.5">Speed (Act / Pred)</th>
-                <th className="pb-1.5">GDOP</th>
-                <th className="pb-1.5">Est. Deviation (Error)</th>
-                <th className="pb-1.5">IMU Motion State</th>
+              <tr className="text-[#00aa33] border-b border-[#003310] uppercase">
+                <th className="pb-1">CALLSIGN / TARGET</th>
+                <th className="pb-1">DORSAL AZIMUTH</th>
+                <th className="pb-1">CONSTELLATION STATUS</th>
+                <th className="pb-1">BEACONS</th>
+                <th className="pb-1">VELOCITY (ACT / KF)</th>
+                <th className="pb-1">GDOP</th>
+                <th className="pb-1">SPATIAL ERROR (Δ)</th>
+                <th className="pb-1">HARNESS STATE</th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-white/5">
+            <tbody className="divide-y divide-[#00220a]">
               {tags.map((tag) => {
                 const res = results.find(r => r.tagId === tag.id);
                 return (
-                  <tr key={tag.id} className="text-slate-300 hover:bg-white/5 transition-colors">
-                    <td className="py-1.5 font-bold text-white flex items-center gap-1.5">
-                      <span className="w-2 h-2 rounded-full" style={{ backgroundColor: tag.color }} />
-                      {tag.name}
+                  <tr key={tag.id} className="text-[#00cc3a] hover:bg-[#00220a]">
+                    <td className="py-1 font-bold text-[#00f2fe]">
+                      [TRK] {tag.name.toUpperCase()}
                     </td>
-                    <td className="py-1.5 text-cyan-300 font-mono text-[10px]">
-                      🧭 {Math.round(tag.headingDeg ?? 90)}° {tag.compassData?.cardinal ?? 'E'}
+                    <td className="py-1 text-[#00f2fe]">
+                      {Math.round(tag.headingDeg ?? 90)}° {tag.compassData?.cardinal ?? 'E'}
                     </td>
-                    <td className="py-1.5">
+                    <td className="py-1">
                       {res?.lockType === 'FULL_3D_LOCK' ? (
-                        <span className="inline-flex items-center gap-1 text-emerald-400 bg-emerald-500/10 px-2 py-0.5 rounded border border-emerald-500/20 text-[10px]">
-                          <CheckCircle2 size={11} /> 3D Lock
-                          {res.hypothesisFlipDetected && (
-                            <span className="text-cyan-300 ml-1 font-bold">(🔄 Mirror Re-aligned)</span>
-                          )}
-                          {res.outlierAnchorIds && res.outlierAnchorIds.length > 0 && (
-                            <span className="text-amber-400 ml-1 font-bold">({res.outlierAnchorIds.length} Outlier Filtered)</span>
-                          )}
+                        <span className="text-[#00ff41] font-bold">
+                          [3D-LOCK: MULTILATERAL]
+                          {res.hypothesisFlipDetected && <span className="text-[#00f2fe] ml-1">(FLIP-RESOLVED)</span>}
                         </span>
                       ) : res?.lockType === 'DUAL_PINPOINT_LOCK' ? (
-                        <span className="inline-flex items-center gap-1 text-cyan-300 bg-cyan-500/10 px-2 py-0.5 rounded border border-cyan-500/30 text-[10px]">
-                          <CheckCircle2 size={11} className="text-cyan-400" /> Fused 2-Anchor Lock
-                          {res.dualInfo && (
-                            <span className="text-emerald-300 ml-1 font-mono">
-                              (Match: +{res.dualInfo.candidate1VectorAlignment} | Ghost: Δ{res.dualInfo.outcastLeapMeters}m)
-                            </span>
-                          )}
+                        <span className="text-[#00f2fe] font-bold">
+                          [2-BCN PINPOINT]
+                          {res.dualInfo && ` (MATCH +${res.dualInfo.candidate1VectorAlignment})`}
                         </span>
                       ) : res?.lockType === 'DUAL_KINEMATIC_LOCK' ? (
-                        <span className="inline-flex items-center gap-1 text-emerald-400 bg-emerald-500/10 px-2 py-0.5 rounded border border-emerald-500/20 text-[10px]">
-                          <CheckCircle2 size={11} /> 2-Anchor Kinematic Lock
-                          {res.dualInfo && (
-                            <span className="text-cyan-300 ml-1 font-mono">
-                              (Mirror Outcast: Δ{res.dualInfo.outcastLeapMeters}m)
-                            </span>
-                          )}
+                        <span className="text-[#ff9900]">
+                          [2-BCN KINEMATIC]
                         </span>
                       ) : res?.lockType === 'DUAL_AMBIGUOUS_CHORD' ? (
-                        <span className="inline-flex items-center gap-1 text-amber-400 bg-amber-500/10 px-2 py-0.5 rounded border border-amber-500/20 text-[10px]">
-                          <AlertTriangle size={11} /> 2-Anchor Chord Crossing
-                        </span>
-                      ) : res?.lockType === 'DUAL_COLD_BOOT' ? (
-                        <span className="inline-flex items-center gap-1 text-slate-300 bg-white/10 px-2 py-0.5 rounded border border-white/20 text-[10px]">
-                          <AlertTriangle size={11} /> 2-Anchor Cold Boot (Syncing)
-                        </span>
-                      ) : res?.lockType === 'DUAL_AMBIGUITY' ? (
-                        <span className="inline-flex items-center gap-1 text-amber-400 bg-amber-500/10 px-2 py-0.5 rounded border border-amber-500/20 text-[10px]">
-                          <AlertTriangle size={11} /> 2-Anchor Dual Candidates
+                        <span className="text-[#ff9900]">
+                          [2-BCN CHORD CROSSING]
                         </span>
                       ) : res?.lockType === 'RADIAL_RING' ? (
-                        <span className="inline-flex items-center gap-1 text-cyan-400 bg-cyan-500/10 px-2 py-0.5 rounded border border-cyan-500/20 text-[10px]">
-                          <AlertTriangle size={11} /> 1-Anchor Radial Ring
+                        <span className="text-[#ff9900]">
+                          [1-BCN RADIAL RING]
                         </span>
                       ) : (
-                        <span className="inline-flex items-center gap-1 text-rose-400 bg-rose-500/10 px-2 py-0.5 rounded border border-rose-500/20 text-[10px]">
-                          <XCircle size={11} /> Blind Zone (0 Anchors)
+                        <span className="text-[#ff3b30] font-bold">
+                          [BLIND ZONE: 0 BEACONS]
                         </span>
                       )}
                     </td>
-                    <td className="py-1.5 font-semibold text-cyan-300">
-                      {res?.contributingAnchorIds.length || 0} Anchors
+                    <td className="py-1 text-[#00f2fe]">
+                      {res?.contributingAnchorIds.length || 0} BEACONS
                     </td>
-                    <td className="py-1.5 font-mono text-[10px]">
-                      <span className="text-cyan-300 font-semibold">{tag.speedMps ?? res?.actualSpeedMps ?? 0}</span>
-                      <span className="text-slate-500"> / </span>
-                      <span className="text-emerald-400 font-semibold">{res?.speedMps ?? 0} m/s</span>
+                    <td className="py-1">
+                      <span className="text-[#00f2fe]">{tag.speedMps ?? res?.actualSpeedMps ?? 0}</span>
+                      <span className="text-[#007780]"> / </span>
+                      <span className="text-[#00ff41]">{res?.speedMps ?? 0} M/S</span>
                     </td>
-                    <td className="py-1.5">
-                      {res ? res.gdop : '—'}
+                    <td className="py-1">
+                      {res ? (
+                        <span className={res.gdop < 2.5 ? 'text-[#00ff41]' : res.gdop < 5 ? 'text-[#00f2fe]' : 'text-[#ff9900]'}>
+                          {res.gdop}
+                        </span>
+                      ) : '—'}
                     </td>
-                    <td className="py-1.5 font-bold">
+                    <td className="py-1 font-bold">
                       {res?.lockType === 'FULL_3D_LOCK' ? (
-                        <span className={res.errorMeters < 3 ? 'text-emerald-400' : 'text-amber-400'}>
-                          ±{res.errorMeters} m
-                        </span>
+                        <span className={res.errorMeters < 3 ? 'text-[#00ff41]' : 'text-[#ff9900]'}>±{res.errorMeters} M</span>
                       ) : res?.lockType === 'DUAL_PINPOINT_LOCK' ? (
-                        <div className="flex flex-col">
-                          <span className={res.errorMeters < 3 ? 'text-emerald-400' : 'text-cyan-300'}>
-                            Pinpoint: ±{res.errorMeters} m
-                          </span>
-                          {res.dualInfo && (
-                            <span className="text-rose-400 text-[10px] font-normal">
-                              Ghost: ±{res.dualInfo.candidate2ErrorMeters} m ({res.dualInfo.candidate2VectorAlignment})
-                            </span>
-                          )}
-                        </div>
+                        <span className="text-[#00f2fe]">PINPOINT: ±{res.errorMeters} M</span>
                       ) : res?.lockType === 'DUAL_KINEMATIC_LOCK' ? (
-                        <div className="flex flex-col">
-                          <span className={res.errorMeters < 3 ? 'text-emerald-400' : 'text-amber-400'}>
-                            Opt 1 (Lock): ±{res.errorMeters} m
-                          </span>
-                          {res.dualInfo && (
-                            <span className="text-rose-400 text-[10px] font-normal">
-                              Opt 2 (Ghost): ±{res.dualInfo.candidate2ErrorMeters} m
-                            </span>
-                          )}
-                        </div>
-                      ) : res?.lockType === 'DUAL_AMBIGUOUS_CHORD' || res?.lockType === 'DUAL_AMBIGUITY' ? (
-                        <div className="flex flex-col">
-                          <span className="text-amber-300">Opt 1: ±{res.dualInfo?.candidate1ErrorMeters ?? res.errorMeters} m</span>
-                          {res.dualInfo && (
-                            <span className="text-amber-400/80 text-[10px] font-normal">
-                              Opt 2: ±{res.dualInfo.candidate2ErrorMeters} m
-                            </span>
-                          )}
-                        </div>
+                        <span className="text-[#ff9900]">±{res.errorMeters} M</span>
                       ) : res?.lockType === 'RADIAL_RING' ? (
-                        <span className="text-cyan-300">Ring r ≈ {res.radialRing?.radiusMeters} m</span>
+                        <span className="text-[#ff9900]">R ≈ {res.radialRing?.radiusMeters} M</span>
                       ) : (
-                        <span className="text-slate-600">—</span>
+                        <span className="text-[#ff3b30]">—</span>
                       )}
                     </td>
-                    <td className="py-1.5">
-                      {tag.imuResting ? (
-                        <span className="text-purple-400">Lying Down (Sleeping)</span>
-                      ) : (
-                        <span className="text-emerald-400">Active / Moving</span>
-                      )}
+                    <td className="py-1">
+                      {tag.imuResting ? <span className="text-[#ff9900]">[DORMANT]</span> : <span className="text-[#00f2fe]">[PATROLLING]</span>}
                     </td>
                   </tr>
                 );

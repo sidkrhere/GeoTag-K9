@@ -1,18 +1,4 @@
 import React from 'react';
-import { 
-  Pointer, 
-  SquareDashedBottomCode, 
-  Radio, 
-  Coffee, 
-  Server, 
-  Dog, 
-  RotateCcw, 
-  Play, 
-  Pause, 
-  School,
-  Route,
-  MapPinOff
-} from 'lucide-react';
 import { ActiveTool, GeoCentre } from '../types/simulation';
 
 interface TopToolbarProps {
@@ -38,72 +24,92 @@ export const TopToolbar: React.FC<TopToolbarProps> = ({
   pathNodeCount,
   onClearPath
 }) => {
-  const tools: { id: ActiveTool; label: string; icon: React.ReactNode; badge?: string; desc: string }[] = [
+  const tools: {
+    id: ActiveTool;
+    code: string;
+    label: string;
+    glyph: string;
+    badge?: string;
+    colorClass: string;
+    desc: string;
+  }[] = [
     {
       id: 'SELECT_MOVE',
-      label: 'Select / Drag',
-      icon: <Pointer size={18} />,
-      desc: 'Move and inspect nodes, dogs, or building vertices'
+      code: 'F1',
+      glyph: '⌖',
+      label: 'SELECT',
+      colorClass: 'radar-key-cyan',
+      desc: 'Inspect target tracks, beacons, or obstacle vertices'
     },
     {
       id: 'DRAW_BUILDING',
-      label: 'Draw Building',
-      icon: <SquareDashedBottomCode size={18} />,
-      badge: 'Lasso',
-      desc: 'Click canvas to drop wall vertices; click start node to close'
+      code: 'F2',
+      glyph: '▨',
+      label: 'PLOT WALL',
+      badge: 'RF ATTEN',
+      colorClass: 'radar-key-red',
+      desc: 'Plot RF obstacle boundaries; click origin to close'
     },
     {
       id: 'TRACE_PATH',
-      label: 'Trace Dog Path',
-      icon: <Route size={18} className="text-emerald-400" />,
-      badge: pathNodeCount > 0 ? `${pathNodeCount} Nodes` : 'New',
-      desc: 'Click on canvas to drop turn nodes for Bruno to follow'
+      code: 'F3',
+      glyph: '☡',
+      label: 'TRACE RT',
+      badge: pathNodeCount > 0 ? `${pathNodeCount}N` : undefined,
+      colorClass: 'radar-key-green',
+      desc: 'Plot dog patrol turn waypoints for trajectory follow'
     },
     {
       id: 'ADD_TIER1_STOP',
-      label: 'Tier 1 Pole',
-      icon: <Radio size={18} className="text-cyan-400" />,
-      desc: 'High mast pole anchor (Solar + LoRa backhaul)'
+      code: 'F4',
+      glyph: '▲',
+      label: 'T-1 MAST',
+      colorClass: 'radar-key-cyan',
+      desc: 'Deploy High-Power Solar Radar Mast (LoRa backhaul)'
     },
     {
       id: 'ADD_TIER2_STOP',
-      label: 'Tier 2 Eatery',
-      icon: <Coffee size={18} className="text-amber-400" />,
-      desc: 'Ground-level canteen/cafe anchor (Mains + Wi-Fi)'
+      code: 'F5',
+      glyph: '◈',
+      label: 'T-2 AUX',
+      colorClass: 'radar-key-orange',
+      desc: 'Deploy Ground Auxiliary Relay Beacon'
     },
     {
       id: 'ADD_GEOCENTRE',
-      label: 'GeoCentre',
-      icon: <Server size={18} className="text-purple-400" />,
-      badge: geoCentre ? '1/1 Placed' : '0/1',
-      desc: 'Central localization server (Strictly max 1 instance)'
+      code: 'F6',
+      glyph: '⊕',
+      label: 'HQ BASE',
+      badge: geoCentre ? '1/1' : '0/1',
+      colorClass: 'radar-key-cyan',
+      desc: 'Central Command Bunker Localization Hub'
     }
   ];
 
   return (
-    <header className="glass-panel fixed top-3 left-4 right-4 z-30 flex items-center justify-between px-4 py-2.5 rounded-2xl border border-white/10 shadow-2xl">
-      {/* Brand & Project Info */}
-      <div className="flex items-center gap-3 pr-4 border-r border-white/10">
-        <div className="w-10 h-10 rounded-xl bg-gradient-to-tr from-cyan-500 to-blue-600 flex items-center justify-center shadow-lg shadow-cyan-500/20">
-          <Dog size={22} className="text-white" />
+    <header className="radar-panel fixed top-3 left-4 right-4 z-30 flex items-center justify-between px-3 py-2 font-mono">
+      {/* 1950s Stamped Identification Plate */}
+      <div className="flex items-center gap-3 pr-4 border-r border-[#00551a]">
+        <div className="w-8 h-8 border border-[#00f2fe] bg-[#001418] flex items-center justify-center text-[#00f2fe] font-bold text-sm glow-cyan">
+          K9
         </div>
         <div>
           <div className="flex items-center gap-2">
-            <h1 className="font-display font-bold text-base text-white tracking-wide">
-              GeoTag <span className="text-cyan-400">K9</span>
-            </h1>
-            <span className="text-[10px] font-mono uppercase px-2 py-0.5 rounded-full bg-cyan-500/10 text-cyan-400 border border-cyan-500/20">
-              IIT Ropar
+            <span className="text-xs font-bold tracking-widest text-[#00f2fe] glow-cyan">
+              RADAR PLOTTER MK-52
+            </span>
+            <span className="text-[9px] px-1.5 py-0.2 bg-[#001f22] border border-[#007780] text-[#00f2fe]">
+              AN/FPS-52
             </span>
           </div>
-          <p className="text-[11px] text-slate-400 font-sans hidden sm:block">
-            Hybrid Localization & Network Simulator
+          <p className="text-[10px] text-[#00cc3a] hidden sm:block">
+            IIT-ROPAR SECTOR COMMAND // 2.4GHz + LoRa
           </p>
         </div>
       </div>
 
-      {/* Main Mode / Tool Switcher */}
-      <nav aria-label="Tool Switcher" className="flex items-center gap-1.5 overflow-x-auto py-1 px-2">
+      {/* Main Mode / Tool Switchboard */}
+      <nav aria-label="Radar Mode Selector" className="flex items-center gap-1.5 overflow-x-auto py-0.5 px-1">
         {tools.map((t) => {
           const isActive = activeTool === t.id;
           return (
@@ -111,17 +117,15 @@ export const TopToolbar: React.FC<TopToolbarProps> = ({
               key={t.id}
               onClick={() => setActiveTool(t.id)}
               title={t.desc}
-              className={`flex items-center gap-2 px-3 py-1.5 rounded-xl text-xs font-medium transition-all duration-200 relative group cursor-pointer ${
-                isActive
-                  ? 'bg-cyan-500/20 text-cyan-300 border border-cyan-500/40 shadow-sm shadow-cyan-500/30'
-                  : 'text-slate-300 hover:text-white hover:bg-white/5 border border-transparent'
-              }`}
+              className={`radar-key ${t.colorClass} ${isActive ? 'radar-key-active' : ''}`}
             >
-              {t.icon}
-              <span className="hidden md:inline">{t.label}</span>
+              <span className="opacity-80 text-[10px]">{t.glyph}</span>
+              <span>{t.label}</span>
               {t.badge && (
-                <span className={`text-[10px] px-1.5 py-0.2 rounded font-mono ${
-                  isActive ? 'bg-cyan-400/20 text-cyan-200' : 'bg-white/10 text-slate-400'
+                <span className={`text-[9px] px-1 border ${
+                  isActive 
+                    ? 'border-[#010602] bg-[#010602] text-current' 
+                    : 'border-current bg-black/40'
                 }`}>
                   {t.badge}
                 </span>
@@ -131,47 +135,44 @@ export const TopToolbar: React.FC<TopToolbarProps> = ({
         })}
       </nav>
 
-      {/* Action Controls & Presets */}
-      <div className="flex items-center gap-2 pl-4 border-l border-white/10">
+      {/* Rotary Action Switches & System Commands */}
+      <div className="flex items-center gap-1.5 pl-3 border-l border-[#00551a]">
+        {/* Sweep / Auto-Walk Toggle */}
         <button
           onClick={() => setAutoWalk((prev: boolean) => !prev)}
-          title={autoWalk ? 'Pause dog wandering' : 'Resume autonomous dog wandering'}
-          className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-medium transition-colors cursor-pointer ${
-            autoWalk 
-              ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/30'
-              : 'bg-white/5 text-slate-400 hover:text-white hover:bg-white/10 border border-white/10'
-          }`}
+          title={autoWalk ? 'Halt autonomous dog patrol' : 'Engage autonomous dog patrol'}
+          className={`radar-key radar-key-green ${autoWalk ? 'radar-key-active' : ''}`}
         >
-          {autoWalk ? <Pause size={15} /> : <Play size={15} />}
-          <span className="hidden lg:inline">{autoWalk ? 'Pause Walk' : 'Auto Walk'}</span>
+          <span>{autoWalk ? '▶ PATROL: RUN' : '⏸ PATROL: HALT'}</span>
         </button>
 
+        {/* Clear Route Button */}
         {pathNodeCount > 0 && (
           <button
             onClick={onClearPath}
-            title="Clear traced dog route"
-            className="flex items-center gap-1 px-2.5 py-1.5 rounded-xl text-xs font-medium text-amber-300 bg-amber-500/10 hover:bg-amber-500/20 border border-amber-500/20 transition-colors cursor-pointer"
+            title="Purge plotted patrol waypoints"
+            className="radar-key radar-key-red text-[10px]"
           >
-            <MapPinOff size={14} />
-            <span className="hidden xl:inline">Clear Path</span>
+            <span>PURGE RT</span>
           </button>
         )}
 
+        {/* IIT Ropar Preset Reset */}
         <button
           onClick={onResetPreset}
-          title="Reset to official IIT Ropar Campus Layout Preset"
-          className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-medium text-slate-300 hover:text-white bg-white/5 hover:bg-white/10 border border-white/10 transition-colors cursor-pointer"
+          title="Re-zero to IIT Ropar Standard Grid Layout"
+          className="radar-key radar-key-orange text-[10px]"
         >
-          <School size={15} className="text-amber-400" />
-          <span className="hidden xl:inline">IIT Ropar Preset</span>
+          <span>PRESET: ROPAR</span>
         </button>
 
+        {/* Zero Scope / Clear All */}
         <button
           onClick={onClearAll}
-          title="Clear canvas"
-          className="p-1.5 rounded-xl text-slate-400 hover:text-rose-400 hover:bg-rose-500/10 border border-transparent hover:border-rose-500/20 transition-colors cursor-pointer"
+          title="Emergency Master Clear / Zero Scope"
+          className="radar-key radar-key-red text-[10px]"
         >
-          <RotateCcw size={16} />
+          <span>ZERO SCOPE</span>
         </button>
       </div>
     </header>

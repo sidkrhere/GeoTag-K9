@@ -9,22 +9,25 @@ import { Point2D } from '../types/simulation';
 export class CanineKalmanFilter {
   // State: [px, py, vx, vy] (positions in pixels, velocities in pixels/sec)
   private state: [number, number, number, number];
-  
+
   // 4x4 State Covariance Matrix P
   private P: number[][];
 
   private lastUpdateMs: number;
   private pixelsPerMeter: number;
   private maxSpeedMps: number;
+  private smoothedSpeedMps: number = 0;
   private initialized: boolean = false;
   private consecutiveRejections: number = 0;
 
-  constructor(initialPos: Point2D, pixelsPerMeter: number = 2.8, maxSpeedMps: number = 45.0) {
+  constructor(initialPos: Point2D, pixelsPerMeter: number = 2.8, maxSpeedMps: number = 15.0) {
     this.pixelsPerMeter = pixelsPerMeter;
-    this.maxSpeedMps = maxSpeedMps;
+    // Generous canine kinematic ceiling (default 15.0 m/s = 54 km/h)
+    this.maxSpeedMps = Math.max(2.0, maxSpeedMps);
     this.state = [initialPos.x, initialPos.y, 0, 0];
     this.lastUpdateMs = Date.now();
     this.consecutiveRejections = 0;
+    this.smoothedSpeedMps = 0;
 
     // Initial covariance: Moderate certainty in position, moderate uncertainty in velocity
     this.P = [
@@ -37,11 +40,11 @@ export class CanineKalmanFilter {
   }
 
   /**
-   * Sets dynamic velocity bounding limit in m/s scaled to simulation speed.
+   * Sets dynamic velocity bounding limit in m/s scaled to canine gait.
    */
   public setMaxSpeedMps(speedMps: number): void {
     if (speedMps > 0) {
-      this.maxSpeedMps = speedMps;
+      this.maxSpeedMps = Math.max(2.0, speedMps);
     }
   }
 
@@ -56,6 +59,7 @@ export class CanineKalmanFilter {
     this.state = [pos.x, pos.y, 0, 0];
     this.lastUpdateMs = Date.now();
     this.consecutiveRejections = 0;
+    this.smoothedSpeedMps = 0;
     this.P = [
       [16.0, 0.0, 0.0, 0.0],
       [0.0, 16.0, 0.0, 0.0],
@@ -66,7 +70,7 @@ export class CanineKalmanFilter {
 
   /**
    * Kinematic state & covariance prediction step: x_{k|k-1} = F * x_{k-1|k-1}
-   * Enforces the canine dynamic velocity bound: ||v|| <= maxSpeedMps
+   * Predicts future position and incorporates dynamic continuous acceleration noise.
    */
   public predict(nowMs: number, headingRad?: number): Point2D {
     if (!this.initialized) return { x: this.state[0], y: this.state[1] };
@@ -80,11 +84,11 @@ export class CanineKalmanFilter {
       const uCompassX = Math.sin(headingRad);
       const uCompassY = -Math.cos(headingRad);
       const currentSpeed = Math.sqrt(this.state[2] * this.state[2] + this.state[3] * this.state[3]);
-      
+
       if (currentSpeed > 0.5 * this.pixelsPerMeter) {
-        // Blend 25% of heading vector into velocity orientation
-        const guidedVx = this.state[2] * 0.75 + (uCompassX * currentSpeed) * 0.25;
-        const guidedVy = this.state[3] * 0.75 + (uCompassY * currentSpeed) * 0.25;
+        // Blend 20% of heading vector into velocity orientation
+        const guidedVx = this.state[2] * 0.80 + (uCompassX * currentSpeed) * 0.20;
+        const guidedVy = this.state[3] * 0.80 + (uCompassY * currentSpeed) * 0.20;
         this.state[2] = guidedVx;
         this.state[3] = guidedVy;
       }
@@ -94,13 +98,14 @@ export class CanineKalmanFilter {
     this.state[0] += this.state[2] * dt;
     this.state[1] += this.state[3] * dt;
 
-    // 2. Dynamic Velocity Clamping (Canine physiological bound)
+    // 2. Soft velocity headroom bound (prevents runaway numerical divergence while allowing agile catchup)
     this.clampVelocity();
 
     // 3. Propagate Covariance: P = F * P * F^T + Q
-    // Continuous white-noise acceleration model scaled with dynamic speed cap
-    const maxAccelMps2 = Math.max(12.0, this.maxSpeedMps * 0.6);
-    const q = maxAccelMps2 * this.pixelsPerMeter * this.pixelsPerMeter;
+    // Continuous adaptive acceleration model: dynamically scales Q with speed and acceleration demand
+    const currentSpeedMps = Math.hypot(this.state[2], this.state[3]) / this.pixelsPerMeter;
+    const dynamicMaxAccel = Math.max(25.0, Math.max(this.maxSpeedMps, currentSpeedMps) * 2.5);
+    const q = dynamicMaxAccel * this.pixelsPerMeter * this.pixelsPerMeter;
 
     const dt2 = dt * dt;
     const dt3 = dt2 * dt;
@@ -131,8 +136,8 @@ export class CanineKalmanFilter {
 
   /**
    * Bayesian measurement update step: x_{k|k} = x_{k|k-1} + K * (z - H * x_{k|k-1})
-   * Uses Mahalanobis distance gating to reject wall-occluded phantom range jumps,
-   * while adaptively recovering if consecutive rejections indicate filter divergence.
+   * Eliminates artificial position displacement clamping so the filter locks onto
+   * true position with zero spatial lag during acceleration.
    */
   public update(
     meas: Point2D,
@@ -160,25 +165,21 @@ export class CanineKalmanFilter {
 
     const now = Date.now();
     const dt = Math.max(0.01, Math.min(0.25, (now - this.lastUpdateMs) / 1000.0));
-    const maxDisplacementPix = this.maxSpeedMps * this.pixelsPerMeter * dt;
 
-    // Chi-Square gating: threshold 50.0 gives robust margin against high simulation speeds & sudden turns
-    if (dM2 > 50.0) {
+    // Chi-Square gating: threshold 60.0 allows swift agility during canine sprints while rejecting wall spikes
+    if (dM2 > 60.0) {
       this.consecutiveRejections++;
       if (this.consecutiveRejections >= 2) {
-        // Fast recovery: catch up swiftly towards the measurement to close spatial lag
-        const dist = Math.hypot(yX, yY) || 1;
-        const catchupStep = Math.min(dist, Math.max(maxDisplacementPix * 3.0, dist * 0.65));
-        
-        this.state[0] += (yX / dist) * catchupStep;
-        this.state[1] += (yY / dist) * catchupStep;
-        this.state[2] = (yX / dist) * Math.min(this.maxSpeedMps * this.pixelsPerMeter, (catchupStep / dt));
-        this.state[3] = (yY / dist) * Math.min(this.maxSpeedMps * this.pixelsPerMeter, (catchupStep / dt));
+        // Fast recovery: immediately realign state to measurement to eradicate spatial lag
+        this.state[0] = meas.x;
+        this.state[1] = meas.y;
+        this.state[2] = yX / dt;
+        this.state[3] = yY / dt;
         this.clampVelocity();
 
         // Inflate covariance to reflect transition uncertainty
-        this.P[0][0] = Math.min(100.0, this.P[0][0] * 1.2);
-        this.P[1][1] = Math.min(100.0, this.P[1][1] * 1.2);
+        this.P[0][0] = Math.min(100.0, this.P[0][0] * 1.5);
+        this.P[1][1] = Math.min(100.0, this.P[1][1] * 1.5);
 
         this.lastUpdateMs = now;
         return this.getResult(false);
@@ -207,25 +208,13 @@ export class CanineKalmanFilter {
     const k30 = this.P[3][0] * invS00 + this.P[3][1] * invS01;
     const k31 = this.P[3][0] * invS01 + this.P[3][1] * invS11;
 
-    // State update with Dynamic Velocity Position Clamping:
-    const deltaX = k00 * yX + k01 * yY;
-    const deltaY = k10 * yX + k11 * yY;
-    const deltaDist = Math.hypot(deltaX, deltaY);
-    const allowedDisplacement = maxDisplacementPix * 1.6;
-
-    if (deltaDist > allowedDisplacement && deltaDist > 1e-4) {
-      const scale = allowedDisplacement / deltaDist;
-      this.state[0] += deltaX * scale;
-      this.state[1] += deltaY * scale;
-    } else {
-      this.state[0] += deltaX;
-      this.state[1] += deltaY;
-    }
-
+    // Direct, optimal Bayesian state update with ZERO artificial position clamping:
+    this.state[0] += k00 * yX + k01 * yY;
+    this.state[1] += k10 * yX + k11 * yY;
     this.state[2] += k20 * yX + k21 * yY;
     this.state[3] += k30 * yX + k31 * yY;
 
-    // Enforce dynamic canine velocity clamping on posterior state
+    // Apply soft velocity headroom bound
     this.clampVelocity();
     this.lastUpdateMs = now;
 
@@ -244,10 +233,12 @@ export class CanineKalmanFilter {
   }
 
   /**
-   * Strictly clamps velocity magnitude to the canine maximum physical limit.
+   * Soft-bounds velocity magnitude with generous catch-up headroom (up to 25.0 m/s),
+   * ensuring the filter never starves position convergence while preventing runaway divergence.
    */
   private clampVelocity(): void {
-    const maxPixPerSec = this.maxSpeedMps * this.pixelsPerMeter;
+    const maxCatchUpMps = Math.max(25.0, this.maxSpeedMps * 2.0);
+    const maxPixPerSec = maxCatchUpMps * this.pixelsPerMeter;
     const currentSpeedPix = Math.sqrt(this.state[2] * this.state[2] + this.state[3] * this.state[3]);
 
     if (currentSpeedPix > maxPixPerSec && currentSpeedPix > 1e-4) {
@@ -258,8 +249,15 @@ export class CanineKalmanFilter {
   }
 
   private getResult(wasRejected: boolean) {
-    const speedPix = Math.sqrt(this.state[2] * this.state[2] + this.state[3] * this.state[3]);
-    const speedMps = Math.round((speedPix / this.pixelsPerMeter) * 10) / 10;
+    const rawSpeedPix = Math.hypot(this.state[2], this.state[3]);
+    const rawSpeedMps = rawSpeedPix / this.pixelsPerMeter;
+
+    // Smooth reported telemetry speed with EMA to prevent digit flicker:
+    this.smoothedSpeedMps = this.smoothedSpeedMps === 0
+      ? rawSpeedMps
+      : this.smoothedSpeedMps * 0.70 + rawSpeedMps * 0.30;
+
+    const speedMps = Math.round(this.smoothedSpeedMps * 10) / 10;
 
     return {
       pos: { x: this.state[0], y: this.state[1] },

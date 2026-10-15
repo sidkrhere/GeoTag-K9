@@ -1,5 +1,4 @@
 import React, { useState } from 'react';
-import { Activity, ChevronDown, ChevronUp, RotateCw, Sigma } from 'lucide-react';
 import { TrilaterationResult, LapMetrics } from '../types/simulation';
 
 interface TelemetryHUDProps {
@@ -19,14 +18,14 @@ export const TelemetryHUD: React.FC<TelemetryHUDProps> = ({
 }) => {
   const [isExpanded, setIsExpanded] = useState(true);
 
-  // Compute live average error across locked dogs (supporting 3D Full Lock, 2-Anchor Pinpoint, and Kinematic Locks)
-  const lockedResults = trilaterationResults.filter(r => 
+  // Compute live average error across locked targets
+  const lockedResults = trilaterationResults.filter(r =>
     r.lockType === 'FULL_3D_LOCK' ||
     r.lockType === 'DUAL_PINPOINT_LOCK' ||
     r.lockType === 'DUAL_KINEMATIC_LOCK'
   );
 
-  const avgError = lockedResults.length > 0 
+  const avgError = lockedResults.length > 0
     ? Math.round((lockedResults.reduce((acc, r) => acc + r.errorMeters, 0) / lockedResults.length) * 10) / 10
     : 0;
 
@@ -41,197 +40,164 @@ export const TelemetryHUD: React.FC<TelemetryHUDProps> = ({
   const predSpeedVal = lockedResults.length > 0 ? (lockedResults[0].speedMps ?? 0) : 0;
 
   return (
-    <aside 
-      aria-label="Pure Real-Time Telemetry HUD" 
-      className="glass-panel fixed top-20 left-4 z-20 w-[420px] rounded-2xl border border-white/10 shadow-2xl transition-all duration-300 overflow-hidden"
+    <aside
+      aria-label="Tactical Display Unit TDU-5"
+      className="radar-panel fixed top-16 left-4 z-20 w-[420px] font-mono text-[#00ff41]"
     >
-      {/* Header Bar */}
-      <div 
+      {/* 1950s Metal Instrument Faceplate Header */}
+      <div
         onClick={() => setIsExpanded(!isExpanded)}
-        className="flex items-center justify-between px-4 py-3 bg-white/5 border-b border-white/10 cursor-pointer hover:bg-white/10 transition-colors"
+        className="panel-stamped-header cursor-pointer select-none"
       >
-        <div className="flex items-center gap-2 text-white">
-          <Activity size={17} className="text-cyan-400" />
-          <h2 className="font-display font-semibold text-xs tracking-wider uppercase">
-            Live Telemetry HUD
-          </h2>
+        <div className="flex items-center gap-2">
+          <span className="text-xs font-bold tracking-widest text-[#00f2fe] glow-cyan">
+            TACTICAL DISPLAY UNIT // TDU-5
+          </span>
         </div>
         <div className="flex items-center gap-2">
           {lockedResults.length > 0 && (
-            <span className={`flex items-center gap-1.5 text-[11px] font-mono px-2.5 py-0.5 rounded-full border ${
+            <span className={`text-[10px] px-2 py-0.5 border font-bold tracking-wider ${
               is2AnchorPinpoint 
-                ? 'text-cyan-300 bg-cyan-500/10 border-cyan-500/30' 
+                ? 'border-[#00f2fe] bg-[#001f22] text-[#00f2fe]'
                 : is2AnchorKinematic
-                ? 'text-emerald-300 bg-emerald-500/10 border-emerald-500/25'
-                : 'text-emerald-400 bg-emerald-500/10 border-emerald-500/20'
+                  ? 'border-[#ff9900] bg-[#1a0f00] text-[#ff9900]'
+                  : 'border-[#00ff41] bg-[#002b0c] text-[#00ff41]'
             }`}>
-              <span className={`w-1.5 h-1.5 rounded-full animate-ping ${is2AnchorPinpoint ? 'bg-cyan-400' : 'bg-emerald-400'}`} />
-              {lockedResults.length} {is2AnchorPinpoint ? 'Fused 2-Anchor Lock' : is2AnchorKinematic ? 'Kinematic Lock' : '3D Lock'}
+              {is2AnchorPinpoint ? '2-BCN PINPOINT' : is2AnchorKinematic ? 'KINEMATIC' : '3D LOCK'}
             </span>
           )}
-          <button className="text-slate-400 hover:text-white" aria-label="Toggle Telemetry Panel">
-            {isExpanded ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
+          <button className="text-[#00aa33] hover:text-[#00ff41] text-xs font-bold" aria-label="Toggle Panel">
+            {isExpanded ? '[-]' : '[+]'}
           </button>
         </div>
       </div>
 
       {isExpanded && (
-        <div className="p-4 space-y-3.5 font-mono text-[11px]">
-          {/* Row 1: Avg Error & Constellation GDOP */}
-          <div className="grid grid-cols-2 gap-3">
-            {/* Live Error Tile */}
-            <div className="p-3 rounded-xl bg-white/5 border border-white/10 flex flex-col justify-between h-[86px]">
-              <div className="flex items-center justify-between gap-1">
-                <span className="text-slate-400 text-[10px] font-bold uppercase tracking-wider whitespace-nowrap">
-                  Live Error
+        <div className="p-3.5 space-y-3 text-[11px] bg-[#020b04]">
+          {/* Row 1: Primary Localization Error & GDOP Gauges */}
+          <div className="grid grid-cols-2 gap-2.5">
+            {/* Live Error Gauge - Color-coded by error severity */}
+            <div className={`p-2.5 border bg-[#010903] flex flex-col justify-between h-[84px] ${
+              avgError < 3 ? 'border-[#00551a]' : avgError < 7 ? 'border-[#804c00]' : 'border-[#801d18]'
+            }`}>
+              <div className="flex items-center justify-between text-[10px] font-bold uppercase tracking-wider">
+                <span className="text-[#00aa33]">EST SPATIAL ERROR</span>
+                <span className={`text-[9px] ${avgError < 3 ? 'text-[#00ff41]' : avgError < 7 ? 'text-[#ff9900]' : 'text-[#ff3b30]'}`}>
+                  {lockedResults.length > 0 ? '[LOCKED]' : '[UNSOLVED]'}
                 </span>
-                {is2AnchorPinpoint ? (
-                  <span className="text-[10px] px-2 py-0.5 rounded-full bg-cyan-500/20 text-cyan-300 border border-cyan-500/30 font-sans font-bold flex items-center gap-1 whitespace-nowrap">
-                    <span className="w-1.5 h-1.5 rounded-full bg-cyan-400 animate-pulse" />
-                    USED COS + KIN
-                  </span>
-                ) : is2AnchorKinematic ? (
-                  <span className="text-[10px] px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 font-sans font-bold whitespace-nowrap">
-                    Kinematic
-                  </span>
-                ) : lockedResults.length > 0 ? (
-                  <span className="text-[10px] px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 font-sans font-bold whitespace-nowrap">
-                    3D Lock
-                  </span>
-                ) : (
-                  <span className="text-[10px] px-2 py-0.5 rounded-full bg-slate-500/20 text-slate-400 font-sans whitespace-nowrap">
-                    No Lock
-                  </span>
-                )}
               </div>
-              <div className="flex items-baseline gap-1.5">
-                <span className={`text-2xl font-black tabular-nums tracking-tight ${avgError < 3 ? 'text-emerald-400' : avgError < 7 ? 'text-amber-400' : 'text-rose-400'}`}>
+              <div className="flex items-baseline gap-1.5 my-auto">
+                <span className={`text-2xl font-bold tracking-tight ${
+                  avgError < 3 ? 'text-[#00ff41] glow-green' : avgError < 7 ? 'text-[#ff9900] glow-orange' : 'text-[#ff3b30] glow-red'
+                }`}>
                   {lockedResults.length > 0 ? avgError.toFixed(1) : '—'}
                 </span>
-                {lockedResults.length > 0 && <span className="text-xs text-slate-400 font-sans font-medium">m</span>}
+                {lockedResults.length > 0 && <span className="text-xs text-[#008826]">METERS</span>}
+              </div>
+              <div className="text-[9px] text-[#00551a]">
+                RADIAL CONFIDENCE: ±{(avgError * 0.4).toFixed(1)}M
               </div>
             </div>
 
-            {/* Constellation GDOP Tile */}
-            <div className="p-3 rounded-xl bg-white/5 border border-white/10 flex flex-col justify-between h-[86px]">
-              <div className="flex items-center justify-between gap-1">
-                <span className="text-slate-400 text-[10px] font-bold uppercase tracking-wider whitespace-nowrap">
-                  Constellation
-                </span>
-                <span className="text-[10px] px-2 py-0.5 rounded-full bg-cyan-500/10 text-cyan-300 border border-cyan-500/20 font-sans font-medium whitespace-nowrap">
-                  GDOP
-                </span>
+            {/* Constellation GDOP Gauge */}
+            <div className="p-2.5 border border-[#00551a] bg-[#010903] flex flex-col justify-between h-[84px]">
+              <div className="flex items-center justify-between text-[10px] text-[#00aa33] font-bold uppercase tracking-wider">
+                <span>GEOM DILUTION (GDOP)</span>
+                <span className="text-[9px] text-[#00f2fe]">TIE-LINE</span>
               </div>
-              <div className="flex items-baseline gap-1.5">
-                <span className={`text-2xl font-black tabular-nums tracking-tight ${avgGdop < 2.5 ? 'text-emerald-400' : 'text-cyan-400'}`}>
+              <div className="flex items-baseline gap-1.5 my-auto">
+                <span className={`text-2xl font-bold tracking-tight ${
+                  avgGdop < 2.5 ? 'text-[#00ff41] glow-green' : avgGdop < 5 ? 'text-[#00f2fe] glow-cyan' : 'text-[#ff9900] glow-orange'
+                }`}>
                   {lockedResults.length > 0 ? avgGdop.toFixed(2) : '—'}
                 </span>
                 {lockedResults.length > 0 && (
-                  <span className="text-[11px] text-slate-400 font-sans">
-                    {avgGdop < 2.5 ? '(Optimal)' : avgGdop < 5 ? '(Good)' : '(Moderate)'}
+                  <span className={`text-[10px] ${avgGdop < 2.5 ? 'text-[#00ff41]' : avgGdop < 5 ? 'text-[#00f2fe]' : 'text-[#ff9900]'}`}>
+                    {avgGdop < 2.5 ? '[OPTIMAL]' : avgGdop < 5 ? '[GOOD]' : '[MODERATE]'}
                   </span>
                 )}
+              </div>
+              <div className="text-[9px] text-[#00551a]">
+                CONSTELLATION BASELINE RATIO
               </div>
             </div>
           </div>
 
-          {/* Row 1.5: Lap & Lifetime Accuracy Bar (Real-Time Lap Error & Error Till Now) */}
-          <div className="px-3 py-2 rounded-xl bg-gradient-to-r from-cyan-950/40 via-slate-900/50 to-emerald-950/40 border border-white/10 flex items-center justify-between text-[11px] font-mono shadow-inner shadow-cyan-500/5">
-            {/* Lap Error */}
-            <div className="flex items-center gap-2">
-              <div className="w-5 h-5 rounded-md bg-cyan-500/10 border border-cyan-500/25 flex items-center justify-center shrink-0">
-                <RotateCw size={11} className="text-cyan-400" />
-              </div>
-              <div className="flex flex-col">
-                <span className="text-[9px] uppercase tracking-wider text-slate-400 font-bold">
-                  Lap #{lapMetrics?.currentLapNumber ?? 1} Avg
-                </span>
-                <span className="text-xs font-black text-cyan-300 tabular-nums">
-                  {lapMetrics && lapMetrics.currentLapSamples > 0 
-                    ? `${lapMetrics.currentLapAvgError.toFixed(2)} m` 
-                    : '—'}
-                </span>
-              </div>
+          {/* Row 1.5: Patrol Sector Rounds (Laps & Lifetime Benchmark) */}
+          <div className="p-2 border border-[#00551a] bg-[#010903] flex items-center justify-between text-[10px]">
+            <div>
+              <span className="text-[#00aa33] block">PATROL ROUND #{lapMetrics?.currentLapNumber ?? 1}</span>
+              <span className="text-xs font-bold text-[#00f2fe]">
+                {lapMetrics && lapMetrics.currentLapSamples > 0
+                  ? `${lapMetrics.currentLapAvgError.toFixed(2)} M`
+                  : 'SYNCHRONIZING'}
+              </span>
             </div>
 
-            <div className="h-6 w-[1px] bg-white/10" />
+            <div className="h-6 w-[1px] bg-[#00551a]" />
 
-            {/* Lifetime Error Till Now */}
-            <div className="flex items-center gap-2">
-              <div className="w-5 h-5 rounded-md bg-emerald-500/10 border border-emerald-500/25 flex items-center justify-center shrink-0">
-                <Sigma size={11} className="text-emerald-400" />
-              </div>
-              <div className="flex flex-col">
-                <span className="text-[9px] uppercase tracking-wider text-slate-400 font-bold">
-                  Avg Till Now
-                </span>
-                <span className="text-xs font-black text-emerald-300 tabular-nums">
-                  {lapMetrics && lapMetrics.totalSamples > 0 
-                    ? `${lapMetrics.lifetimeAvgError.toFixed(2)} m` 
-                    : '—'}
-                </span>
-              </div>
+            <div>
+              <span className="text-[#00aa33] block">CUMULATIVE ERROR</span>
+              <span className="text-xs font-bold text-[#00ff41]">
+                {lapMetrics && lapMetrics.totalSamples > 0
+                  ? `${lapMetrics.lifetimeAvgError.toFixed(2)} M`
+                  : '—'}
+              </span>
             </div>
 
-            {/* Last Completed Lap Benchmark */}
             {lapMetrics?.lastCompletedLapAvgError != null && (
               <>
-                <div className="h-6 w-[1px] bg-white/10" />
-                <div className="flex flex-col items-end">
-                  <span className="text-[9px] uppercase tracking-wider text-slate-400">Prev Lap</span>
-                  <span className="text-xs font-mono font-bold text-slate-300 tabular-nums">
-                    {lapMetrics.lastCompletedLapAvgError.toFixed(2)} m
+                <div className="h-6 w-[1px] bg-[#00551a]" />
+                <div className="text-right">
+                  <span className="text-[#008826] block">PREV ROUND</span>
+                  <span className="text-xs font-bold text-[#ff9900]">
+                    {lapMetrics.lastCompletedLapAvgError.toFixed(2)} M
                   </span>
                 </div>
               </>
             )}
           </div>
 
-          {/* Row 2: Dedicated Spacious Speed Readouts (No wrapping, rock-solid boxes) */}
-          <div className="grid grid-cols-2 gap-3">
-            {/* Actual Dog Speed */}
-            <div className="p-3 rounded-xl bg-cyan-500/[0.08] border border-cyan-500/25 flex flex-col justify-between h-[92px] overflow-hidden">
-              <div className="flex items-center justify-between">
-                <span className="text-cyan-300 text-[10px] font-bold uppercase tracking-wider whitespace-nowrap">
-                  Actual Speed
-                </span>
-                <span className="flex items-center gap-1 text-[9px] text-cyan-400/90 font-mono">
-                  <span className="w-1.5 h-1.5 rounded-full bg-cyan-400 animate-pulse" />
-                  Live Dog
-                </span>
+          {/* Row 2: Target Velocity & Kalman Filter Estimate (Cyan for Dog, Green for KF) */}
+          <div className="grid grid-cols-2 gap-2.5">
+            <div className="p-2 border border-[#007780] bg-[#001014]">
+              <div className="flex justify-between text-[10px] text-[#00f2fe] font-bold">
+                <span>TARGET SPEED (LIVE)</span>
+                <span>CH-A</span>
               </div>
-              <div className="flex items-baseline gap-1.5">
-                <span className="text-3xl font-black text-cyan-300 tabular-nums tracking-tight">
+              <div className="flex items-baseline gap-1 my-1">
+                <span className="text-xl font-bold text-[#00f2fe] glow-cyan">
                   {actualSpeedVal.toFixed(1)}
                 </span>
-                <span className="text-xs font-bold text-cyan-400/80 uppercase font-sans">m/s</span>
+                <span className="text-[10px] text-[#007780]">M/S</span>
+                <span className="text-[9px] text-[#007780] ml-auto">
+                  ({(actualSpeedVal * 3.6).toFixed(0)} KM/H)
+                </span>
               </div>
             </div>
 
-            {/* Predicted Speed - BIGGER, SPACIOUS ROCK-SOLID BOX */}
-            <div className="p-3 rounded-xl bg-emerald-500/[0.08] border border-emerald-500/35 flex flex-col justify-between h-[92px] overflow-hidden shadow-inner shadow-emerald-500/10">
-              <div className="flex items-center justify-between">
-                <span className="text-emerald-300 text-[10px] font-bold uppercase tracking-wider whitespace-nowrap">
-                  Pred Speed
-                </span>
-                <span className="text-[10px] px-2 py-0.5 rounded-md bg-emerald-500/25 border border-emerald-500/40 text-emerald-300 font-mono font-bold tracking-wide whitespace-nowrap">
-                  DVB-KF
-                </span>
+            <div className="p-2 border border-[#00551a] bg-[#010903]">
+              <div className="flex justify-between text-[10px] text-[#00aa33] font-bold">
+                <span>PRED VELOCITY (KF)</span>
+                <span>DVB-KF</span>
               </div>
-              <div className="flex items-baseline gap-1.5">
-                <span className="text-3xl font-black text-emerald-400 tabular-nums tracking-tight">
+              <div className="flex items-baseline gap-1 my-1">
+                <span className="text-xl font-bold text-[#00ff41] glow-green">
                   {predSpeedVal.toFixed(1)}
                 </span>
-                <span className="text-xs font-bold text-emerald-400/80 uppercase font-sans">m/s</span>
+                <span className="text-[10px] text-[#008826]">M/S</span>
+                <span className="text-[9px] text-[#00551a] ml-auto">
+                  ({(predSpeedVal * 3.6).toFixed(0)} KM/H)
+                </span>
               </div>
             </div>
           </div>
 
-          {/* Row 3: Active Node Counts Footer (Spacious, full width, no cut-offs) */}
-          <div className="pt-2.5 border-t border-white/10 flex items-center justify-between px-1 text-[11px] text-slate-400">
-            <span>T1 Poles: <b className="text-cyan-300 font-bold ml-1">{tier1Count}</b></span>
-            <span>T2 Eateries: <b className="text-amber-300 font-bold ml-1">{tier2Count}</b></span>
-            <span>Doggos: <b className="text-emerald-300 font-bold ml-1">{dogCount}</b></span>
+          {/* Row 3: Active Station Counts with Distinct Colors */}
+          <div className="pt-2 border-t border-[#003310] flex items-center justify-between text-[10px]">
+            <span>T1 MASTS: <b className="text-[#00f2fe] font-bold">{tier1Count}</b></span>
+            <span>T2 RELAYS: <b className="text-[#ff9900] font-bold">{tier2Count}</b></span>
+            <span>TARGETS: <b className="text-[#00f2fe] font-bold">{dogCount}</b></span>
           </div>
         </div>
       )}

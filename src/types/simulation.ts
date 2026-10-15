@@ -171,8 +171,8 @@ export interface SimulationConfig {
   noiseStdDevDb: number;     // Channel noise (dB)
   wallAttenuationDb: number; // Attenuation per building wall
   pathLossExponent: number;  // Log-distance path loss exponent n (usually 2.5 - 3.5 outdoors)
-  pixelsPerMeter: number;    // Scale: e.g. 3 pixels = 1 meter
-  autoWalkSpeed: number;     // Speed for autonomous wandering dogs
+  pixelsPerMeter: number;    // Scale: e.g. 2.8 pixels = 1 meter
+  autoWalkSpeed: number;     // Canine physical speed in meters per second (m/s) [0.8 - 12.0 m/s]
   showRFRipples: boolean;
   showBackhaulBeams: boolean;
   showCoverageHalos: boolean;

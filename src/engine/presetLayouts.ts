@@ -17,7 +17,7 @@ export function getIITRoparPreset(width: number, height: number): {
       name: 'K9 Central Innovation Complex',
       closed: true,
       attenuationDb: 14,
-      color: 'rgba(59, 130, 246, 0.16)',
+      color: 'rgba(40, 10, 8, 0.45)',
       points: [
         { x: cx - 130, y: cy - 85 },
         { x: cx + 130, y: cy - 85 },
@@ -122,7 +122,7 @@ export function getIITRoparPreset(width: number, height: number): {
   const tags: GeoTag[] = [
     {
       id: 'k9-bruno',
-      name: 'Bruno (Campus Retriever)',
+      name: 'TRK-01 (Bruno)',
       x: cx - 165,
       y: cy - 120,
       vx: 0,
