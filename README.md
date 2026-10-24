@@ -37,8 +37,7 @@
 8. [Quickstart and Development](#8-quickstart-and-development)
 9. [Automated Verification and Benchmark Suite](#9-automated-verification-and-benchmark-suite)
 10. [Codebase Architecture and Directory Map](#10-codebase-architecture-and-directory-map)
-11. [Companion Project Documents](#11-companion-project-documents)
-12. [License and Legal Terms](#12-license-and-legal-terms)
+11. [License and Legal Terms](#12-license-and-legal-terms)
 
 ---
 
@@ -454,18 +453,7 @@ GeoTag-K9/
 
 ---
 
-## 11. Companion Project Documents
-
-- **Proposed Hardware Requirements & Prototyping Blueprint**:  
-  [`HARDWARE_SPECS.md`](HARDWARE_SPECS.md) — Itemized 6-Anchor Bill of Materials verified on Robu.in (Total: **₹13,422.00 INR** / ~$160.75 USD; Seeed Studio XIAO ESP32C6 @ ₹981, Bosch BNO085 9-DoF IMU @ ₹2,329, Dual FPC antennas @ ₹386, 5mm EVA spacer, 18650 cells), theoretical link budget calculations ($131.5\text{ dB}$), micro-burst battery life math, and embedded C++ firmware (ESP-IDF/Arduino).
-- **Presentation Deck Blueprint**:  
-  [`PRESENTATION_DECK.md`](PRESENTATION_DECK.md) — 12-slide structured slide blueprint with card visual layouts, formulas, and technical bullet points.
-- **PowerPoint Presentation Deck**:  
-  [`GeoTag_K9_Presentation.pptx`](GeoTag_K9_Presentation.pptx) — Native 16:9 presentation file generated via `pptxgenjs`.
-
----
-
-## 12. License and Legal Terms
+## 11. License and Legal Terms
 
 This software and its mathematical algorithms are released strictly under the **Academic View-Only & Evaluation License**.
 
