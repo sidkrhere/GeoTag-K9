@@ -6,7 +6,6 @@
 [![Vite](https://img.shields.io/badge/Vite-5.4-yellow.svg)](https://vitejs.dev/)
 [![Tailwind CSS](https://img.shields.io/badge/Tailwind-3.4-cyan.svg)](https://tailwindcss.com/)
 [![License: Academic View-Only](https://img.shields.io/badge/License-Academic%20View--Only-red.svg)](LICENSE)
-[![Status: Presentation Ready](https://img.shields.io/badge/Status-Presentation--Ready-orange.svg)](#)
 
 > **GeoTag-K9** is an interactive, mathematical CAD/GIS simulation platform designed to model and validate Real-Time Location System (RTLS) tracking for working canines (K9s) in GPS-denied environments (such as collapsed buildings, subterranean tunnels, and reinforced concrete complexes). The simulator emulates **Bluetooth Low Energy (BLE 5.4 Coded PHY)** signal propagation from Seeed Studio XIAO ESP32C6 transponders, 2D vector ray-casting obstacle attenuation, closed-form 3D multilateration, two-anchor mirror ghost reflection disambiguation, and Continuous-Discrete Extended Kalman Filtering (EKF).
 
