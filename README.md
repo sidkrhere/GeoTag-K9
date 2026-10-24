@@ -1,11 +1,11 @@
 # GeoTag-K9: Tactical Real-Time Location System (RTLS) Simulator
-### High-Fidelity CAD/GIS Simulation Engine for GPS-Denied Canine Tracking
+> **High-Fidelity CAD/GIS Simulation Engine for GPS-Denied Canine Tracking**
 
 [![TypeScript](https://img.shields.io/badge/TypeScript-5.2-blue.svg)](https://www.typescriptlang.org/)
 [![React](https://img.shields.io/badge/React-18.2-purple.svg)](https://reactjs.org/)
 [![Vite](https://img.shields.io/badge/Vite-5.4-yellow.svg)](https://vitejs.dev/)
 [![Tailwind CSS](https://img.shields.io/badge/Tailwind-3.4-cyan.svg)](https://tailwindcss.com/)
-[![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
+[![License: Academic View-Only](https://img.shields.io/badge/License-Academic%20View--Only-red.svg)](LICENSE)
 [![Status: Presentation Ready](https://img.shields.io/badge/Status-Presentation--Ready-orange.svg)](#)
 
 > **GeoTag-K9** is an interactive, mathematical CAD/GIS simulation platform designed to model and validate Real-Time Location System (RTLS) tracking for working canines (K9s) in GPS-denied environments (such as collapsed buildings, subterranean tunnels, and reinforced concrete complexes). The simulator emulates **Bluetooth Low Energy (BLE 5.4 Coded PHY)** signal propagation from Seeed Studio XIAO ESP32C6 transponders, 2D vector ray-casting obstacle attenuation, closed-form 3D multilateration, two-anchor mirror ghost reflection disambiguation, and Continuous-Discrete Extended Kalman Filtering (EKF).
@@ -13,16 +13,16 @@
 ---
 
 ## Table of Contents
-1. [Simulator Overview & Core Objectives](#1-simulator-overview--core-objectives)
-2. [Simulation Loop & Architectural Pipeline](#2-simulation-loop--architectural-pipeline)
-3. [RF Channel Physics & Noise Implementation](#3-rf-channel-physics--noise-implementation)
+1. [Simulator Overview and Core Objectives](#1-simulator-overview-and-core-objectives)
+2. [Simulation Loop and Architectural Pipeline](#2-simulation-loop-and-architectural-pipeline)
+3. [RF Channel Physics and Noise Implementation](#3-rf-channel-physics-and-noise-implementation)
    - [3.1 Log-Distance Path Loss Model](#31-log-distance-path-loss-model)
    - [3.2 2D Vector Ray-Casting Obstacle Attenuation](#32-2d-vector-ray-casting-obstacle-attenuation)
    - [3.3 Box-Muller Gaussian Noise Generation](#33-box-muller-gaussian-noise-generation)
    - [3.4 10 Hz Packet Clock Discretization Cache](#34-10-hz-packet-clock-discretization-cache)
    - [3.5 Temporal Exponential Moving Average (EMA) Smoothing](#35-temporal-exponential-moving-average-ema-smoothing)
    - [3.6 Nonlinear Log-Normal Distance Distortion](#36-nonlinear-log-normal-distance-distortion)
-4. [Multilateration Solvers & Outlier Rejection](#4-multilateration-solvers--outlier-rejection)
+4. [Multilateration Solvers and Outlier Rejection](#4-multilateration-solvers-and-outlier-rejection)
    - [4.1 3D Linear Least Squares (LLS) Solver](#41-3d-linear-least-squares-lls-solver)
    - [4.2 Median Absolute Deviation (MAD) Outlier Filtering](#42-median-absolute-deviation-mad-outlier-filtering)
    - [4.3 Geometric Dilution of Precision (GDOP) Calculation](#43-geometric-dilution-of-precision-gdop-calculation)
@@ -31,28 +31,29 @@
    - [5.2 Mode 1: Quadratic MAP Optimization](#52-mode-1-quadratic-map-optimization)
    - [5.3 Mode 2: Hierarchical Spatial Gate](#53-mode-2-hierarchical-spatial-gate)
 6. [Continuous-Discrete Extended Kalman Filter (EKF)](#6-continuous-discrete-extended-kalman-filter-ekf)
-7. [User Interface & CAD/GIS Instrumentation](#7-user-interface--cadgis-instrumentation)
+7. [User Interface and CAD/GIS Instrumentation](#7-user-interface-and-cadgis-instrumentation)
    - [7.1 Locked 290px Telemetry HUD](#71-locked-290px-telemetry-hud)
-   - [7.2 Campus Canvas & Technical CAD Symbols](#72-campus-canvas--technical-cad-symbols)
-   - [7.3 Interactive Drawing & Configuration Tools](#73-interactive-drawing--configuration-tools)
-8. [Quickstart & Development](#8-quickstart--development)
-9. [Automated Verification & Benchmark Suite](#9-automated-verification--benchmark-suite)
-10. [Codebase Architecture & Directory Map](#10-codebase-architecture--directory-map)
+   - [7.2 Campus Canvas and Technical CAD Symbols](#72-campus-canvas-and-technical-cad-symbols)
+   - [7.3 Interactive Drawing and Configuration Tools](#73-interactive-drawing-and-configuration-tools)
+8. [Quickstart and Development](#8-quickstart-and-development)
+9. [Automated Verification and Benchmark Suite](#9-automated-verification-and-benchmark-suite)
+10. [Codebase Architecture and Directory Map](#10-codebase-architecture-and-directory-map)
 11. [Companion Project Documents](#11-companion-project-documents)
+12. [License and Legal Terms](#12-license-and-legal-terms)
 
 ---
 
-## 1. Simulator Overview & Core Objectives
+## 1. Simulator Overview and Core Objectives
 
 Working search-and-rescue and tactical canines operate in GPS-denied buildings with high velocities (0 to 35 km/h in bursts) and sharp pivot turns. When structural blast walls block signals, the number of line-of-sight anchors frequently drops to two, creating severe mathematical mirror reflections.
 
 The **GeoTag-K9 Simulator** provides an environment to study, benchmark, and visualize:
 - **Physical RF Shadowing**: Real-time vector ray-intersection tests through complex architectural CAD blueprints.
-- **Sparse Constellation Solvers**: Seamless degradation and recovery when moving between 7 anchors, 3 anchors, and 2 anchors.
+- **Sparse Constellation Solvers**: Seamless degradation and recovery when moving between 6 anchors, 3 anchors, and 2 anchors.
 - **Sensor Fusion Resiliency**: How dorsal electronic compass heading constraints resolve geometric ghost reflections.
 - **Kinematic Filtering**: How continuous state extrapolation bridges multi-second line-of-sight signal outages.
 
-```
+```text
 ┌────────────────────────────────────────────────────────────────────────────────┐
 │                           SIMULATOR CAPABILITIES                               │
 ├───────────────────────┬────────────────────────────────────────────────────────┤
@@ -68,11 +69,11 @@ The **GeoTag-K9 Simulator** provides an environment to study, benchmark, and vis
 
 ---
 
-## 2. Simulation Loop & Architectural Pipeline
+## 2. Simulation Loop and Architectural Pipeline
 
 The simulator decouples high-frequency visual rendering from physical radio packet events:
 
-```
+```text
 [60 FPS RequestAnimationFrame Loop]
   │
   ├─► 1. Interpolate Ground-Truth Canine Position (Bruno 🐶)
@@ -106,9 +107,9 @@ The simulator decouples high-frequency visual rendering from physical radio pack
 
 ---
 
-## 3. RF Channel Physics & Noise Implementation
+## 3. RF Channel Physics and Noise Implementation
 
-All RF signal propagation logic is housed in [`src/engine/rfPropagation.ts`](file:///Users/siddharth/GeoTag-K9/src/engine/rfPropagation.ts).
+All RF signal propagation logic is housed in [`src/engine/rfPropagation.ts`](src/engine/rfPropagation.ts).
 
 ### 3.1 Log-Distance Path Loss Model
 
@@ -214,9 +215,9 @@ Because distance is an exponential function of RSSI, symmetric Gaussian noise $X
 
 ---
 
-## 4. Multilateration Solvers & Outlier Rejection
+## 4. Multilateration Solvers and Outlier Rejection
 
-All constellation solvers are implemented in [`src/engine/multilateration.ts`](file:///Users/siddharth/GeoTag-K9/src/engine/multilateration.ts).
+All constellation solvers are implemented in [`src/engine/multilateration.ts`](src/engine/multilateration.ts).
 
 ### 4.1 3D Linear Least Squares (LLS) Solver
 
@@ -268,7 +269,7 @@ Where $a = \frac{r_1^2 - r_2^2 + d_b^2}{2 d_b}$ and $h = \sqrt{r_1^2 - a^2}$.
 
 Both candidates share **identical RF ranges**. In commercial RTLS, picking the wrong candidate causes sudden **30m–60m teleportation jumps** across the baseline chord.
 
-```
+```text
        Candidate 1 (Real Dog 🐶)
               ▲
               │   r1
@@ -304,15 +305,18 @@ When the dog crosses within $2.5\text{ m}$ of the baseline chord, the 120 ms buf
 
 ## 6. Continuous-Discrete Extended Kalman Filter (EKF)
 
-All raw position solutions pass through a continuous-discrete Extended Kalman Filter ([`src/engine/kalmanFilter.ts`](file:///Users/siddharth/GeoTag-K9/src/engine/kalmanFilter.ts)):
+All raw position solutions pass through a continuous-discrete Extended Kalman Filter ([`src/engine/kalmanFilter.ts`](src/engine/kalmanFilter.ts)):
 
 ### State Vector
+
 $$\mathbf{x} = \begin{bmatrix} x & y & v_x & v_y \end{bmatrix}^T$$
 
 ### State Transition
+
 $$\mathbf{x}_k = \mathbf{F} \mathbf{x}_{k-1} + \mathbf{w}_k, \quad \mathbf{F} = \begin{bmatrix} 1 & 0 & \Delta t & 0 \\ 0 & 1 & 0 & \Delta t \\ 0 & 0 & 1 & 0 \\ 0 & 0 & 0 & 1 \end{bmatrix}$$
 
-### Dynamic Measurement Covariance ($R$)
+### Dynamic Measurement Covariance (R)
+
 To handle varying constellation geometry, the measurement covariance adapts continuously:
 
 $$\mathbf{R}_k = \mathbf{R}_0 \cdot \max(1.0, \text{GDOP}) \cdot \alpha_{\text{anchors}}$$
@@ -322,11 +326,11 @@ $$\mathbf{R}_k = \mathbf{R}_0 \cdot \max(1.0, \text{GDOP}) \cdot \alpha_{\text{a
 
 ---
 
-## 7. User Interface & CAD/GIS Instrumentation
+## 7. User Interface and CAD/GIS Instrumentation
 
 The interface is built using a **Gruvbox Light technical parchment aesthetic** (`#FBF1C7`, `#076678`, `#D65D0E`):
 
-```
+```text
 ┌───────────────────────────┬────────────────────────────────────────────────────────┐
 │   LOCKED TELEMETRY HUD    │               CAD/GIS CAMPUS CANVAS                    │
 │      (Width: 290px)       │                                                        │
@@ -338,12 +342,12 @@ The interface is built using a **Gruvbox Light technical parchment aesthetic** (
 │ • PATROL BENCHMARK        │            ▼                    ▼                      │
 │   - Laps: 3 completed     │         ┌──────────────────────────┐                   │
 │   - Mean Err: 2.21 m      │         │   ADMIN BLOCK COMPLEX    │                   │
-│├──────────────────────────┤         │   (14 dB Concrete Loss)  │                   │
+├───────────────────────────┤         │   (14 dB Concrete Loss)  │                   │
 │ • TARGET KINEMATICS       │         │       [GeoCentre ⛯]      │                   │
 │   - Actual: 4.8 m/s       │         └──────────────────────────┘                   │
 │   - Est:    4.6 m/s       │                      ▲                                 │
 ├───────────────────────────┤                      │                                 │
-│ • ANCHORS IN VIEW: 6 / 7  │                [Bruno 🐶 (90° E)]                      │
+│ • ANCHORS IN VIEW: 6 / 6  │                [Bruno 🐶 (90° E)]                      │
 └───────────────────────────┴────────────────────────────────────────────────────────┘
 ```
 
@@ -351,13 +355,13 @@ The interface is built using a **Gruvbox Light technical parchment aesthetic** (
 - The left HUD is strictly locked to `w-[290px]` (`min-width: 290px`, `max-width: 290px`) to prevent dynamic resizing when numbers change.
 - Strict `tabular-nums` CSS font formatting prevents decimal digit jitter.
 
-### 7.2 Campus Canvas & Technical CAD Symbols
+### 7.2 Campus Canvas and Technical CAD Symbols
 - **Bruno Token (`🐶`)**: Friendly circular badge with an outer perimeter compass needle indicating current travel heading.
 - **Admin Block Complex**: Authentic CAD blueprint with thick structural exterior walls producing 14 dB attenuation.
 - **Central Gateway**: Placed on the Admin Block roof with a distinct server cluster icon.
 - **CAD Lattice Radio Towers**: Anchors rendered as high-contrast RF beacons with line-of-sight status rays.
 
-### 7.3 Interactive Drawing & Configuration Tools
+### 7.3 Interactive Drawing and Configuration Tools
 - **Draw Patrol Waypoints**: Click on canvas to define custom canine search paths.
 - **Add Concrete Obstacles**: Draw custom polygon walls to test attenuation.
 - **Reposition Anchors**: Drag anchors across the campus map to analyze GDOP changes.
@@ -365,7 +369,7 @@ The interface is built using a **Gruvbox Light technical parchment aesthetic** (
 
 ---
 
-## 8. Quickstart & Development
+## 8. Quickstart and Development
 
 ### Prerequisites
 - Node.js 18.x or higher
@@ -395,9 +399,9 @@ npm run preview
 
 ---
 
-## 9. Automated Verification & Benchmark Suite
+## 9. Automated Verification and Benchmark Suite
 
-The repository includes a benchmark audit script ([`scratch/audit_disambiguation.ts`](file:///Users/siddharth/GeoTag-K9/scratch/audit_disambiguation.ts)) that executes 1200 continuous simulated steps around the Admin Block:
+The repository includes a benchmark audit script ([`scratch/audit_disambiguation.ts`](scratch/audit_disambiguation.ts)) that executes 1200 continuous simulated steps around the Admin Block:
 
 ```bash
 npx tsx scratch/audit_disambiguation.ts
@@ -416,26 +420,27 @@ npx tsx scratch/audit_disambiguation.ts
 
 ---
 
-## 10. Codebase Architecture & Directory Map
+## 10. Codebase Architecture and Directory Map
 
-```
+```text
 GeoTag-K9/
 ├── src/
 │   ├── components/                 # React UI & CAD/GIS Canvas
+│   │   ├── ConfigPanel.tsx         # RF noise & physics parameter sliders
 │   │   ├── SimulationCanvas.tsx    # HTML5 Canvas 60 FPS rendering
-│   │   ├── TelemetryPanel.tsx      # Locked 290px telemetry HUD
-│   │   ├── TopToolbar.tsx          # Playback & route drawing toolbar
-│   │   └── ConfigPanel.tsx         # RF noise & physics parameter sliders
+│   │   ├── TelemetryFeed.tsx       # Real-time packet telemetry feed
+│   │   ├── TelemetryHUD.tsx        # Locked 290px telemetry HUD
+│   │   └── TopToolbar.tsx          # Playback & route drawing toolbar
 │   ├── engine/                     # Mathematical Algorithms & Solvers
-│   │   ├── rfPropagation.ts        # Box-Muller noise, path loss, ray-casting
-│   │   ├── multilateration.ts      # 3D LLS, MAD filter, GDOP matrix
-│   │   ├── disambiguation.ts       # Quadratic MAP & Hierarchical Spatial Gate
-│   │   ├── kalmanFilter.ts         # Continuous-Discrete EKF kinematic state
 │   │   ├── geometry.ts             # 2D segment intersection & distance math
-│   │   └── presetLayouts.ts        # IIT Ropar campus & anchor coordinates
+│   │   ├── kalmanFilter.ts         # Continuous-Discrete EKF kinematic state
+│   │   ├── multilateration.ts      # 3D LLS, MAD filter, GDOP matrix & disambiguation
+│   │   ├── presetLayouts.ts        # IIT Ropar campus & anchor coordinates
+│   │   └── rfPropagation.ts        # Box-Muller noise, path loss, ray-casting
 │   ├── types/
 │   │   └── simulation.ts           # Type definitions for state vectors & anchors
 │   ├── App.tsx                     # Main application layout & simulation loop
+│   ├── index.css                   # Gruvbox Light styles & Tailwind directives
 │   └── main.tsx                    # React DOM entrypoint
 ├── scratch/
 │   └── audit_disambiguation.ts     # 1200-step automated benchmark audit script
@@ -444,6 +449,7 @@ GeoTag-K9/
 ├── HARDWARE_SPECS.md               # Proposed Hardware Requirements for Prototyping
 ├── PRESENTATION_DECK.md            # 12-Slide Technical Presentation Deck Blueprint
 ├── GeoTag_K9_Presentation.pptx     # 16:9 PowerPoint Presentation File
+├── LICENSE                         # Academic View-Only & Evaluation License
 └── package.json
 ```
 
@@ -452,8 +458,19 @@ GeoTag-K9/
 ## 11. Companion Project Documents
 
 - **Proposed Hardware Requirements & Prototyping Blueprint**:  
-  [`HARDWARE_SPECS.md`](file:///Users/siddharth/GeoTag-K9/HARDWARE_SPECS.md) — Itemized 6-Anchor Bill of Materials verified on Robu.in (Total: **₹13,422.00 INR** / ~$160.75 USD; Seeed Studio XIAO ESP32C6 @ ₹981, Bosch BNO085 9-DoF IMU @ ₹2,329, Dual FPC antennas @ ₹386, 5mm EVA spacer, 18650 cells), theoretical link budget calculations ($131.5\text{ dB}$), micro-burst battery life math, and embedded C++ firmware (ESP-IDF/Arduino).
+  [`HARDWARE_SPECS.md`](HARDWARE_SPECS.md) — Itemized 6-Anchor Bill of Materials verified on Robu.in (Total: **₹13,422.00 INR** / ~$160.75 USD; Seeed Studio XIAO ESP32C6 @ ₹981, Bosch BNO085 9-DoF IMU @ ₹2,329, Dual FPC antennas @ ₹386, 5mm EVA spacer, 18650 cells), theoretical link budget calculations ($131.5\text{ dB}$), micro-burst battery life math, and embedded C++ firmware (ESP-IDF/Arduino).
 - **Presentation Deck Blueprint**:  
-  [`PRESENTATION_DECK.md`](file:///Users/siddharth/GeoTag-K9/PRESENTATION_DECK.md) — 12-slide structured slide blueprint with card visual layouts, formulas, and technical bullet points.
+  [`PRESENTATION_DECK.md`](PRESENTATION_DECK.md) — 12-slide structured slide blueprint with card visual layouts, formulas, and technical bullet points.
 - **PowerPoint Presentation Deck**:  
-  [`GeoTag_K9_Presentation.pptx`](file:///Users/siddharth/GeoTag-K9/GeoTag_K9_Presentation.pptx) — Native 16:9 presentation file generated via `pptxgenjs`.
+  [`GeoTag_K9_Presentation.pptx`](GeoTag_K9_Presentation.pptx) — Native 16:9 presentation file generated via `pptxgenjs`.
+
+---
+
+## 12. License and Legal Terms
+
+This software and its mathematical algorithms are released strictly under the **Academic View-Only & Evaluation License**.
+
+- **Permitted**: You may view, read, and inspect the code and documentation solely for personal academic evaluation, peer review, grading, or non-commercial research demonstration.
+- **Strictly Prohibited**: Copying, reproducing, extracting, modifying, redistributing, commercializing, sublicensing, or using any part of this codebase for training artificial intelligence / machine learning models is strictly prohibited without prior written permission from the author.
+
+For the full legal text, see [`LICENSE`](LICENSE).

@@ -1,0 +1,26 @@
+GEOTAG-K9 ACADEMIC VIEW-ONLY & EVALUATION LICENSE
+Copyright (c) 2026 Siddharth. All Rights Reserved.
+
+IMPORTANT: PLEASE READ THIS LICENSE CAREFULLY BEFORE VIEWING, INSPECTING, OR ACCESSING THIS SOFTWARE AND ASSOCIATED DOCUMENTATION ("SOFTWARE"). BY ACCESSING OR VIEWING THIS REPOSITORY, YOU AGREE TO BE BOUND BY THE TERMS OF THIS AGREEMENT.
+
+1. GRANT OF LIMITED VIEW-ONLY LICENSE
+Subject to the terms and restrictions of this Agreement, the copyright holder grants you a personal, non-exclusive, non-transferable, revocable, and non-commercial license solely to:
+  (a) View, read, and inspect the source code and documentation for the purpose of personal academic evaluation, peer review, grading, or non-commercial research demonstration;
+  (b) Run the simulator locally for temporary personal evaluation in direct connection with academic review.
+
+2. RESTRICTIONS AND PROHIBITIONS
+Except as explicitly authorized in Section 1, ANY AND ALL USE, COPYING, MODIFICATION, OR DISTRIBUTION OF THIS SOFTWARE IS STRICTLY PROHIBITED. Without limiting the generality of the foregoing, you explicitly agree that you shall NOT:
+  (a) REPRODUCE OR EXTRACT: Copy, duplicate, clone, extract, or incorporate any portion of this code, algorithms, equations, mathematical solvers, RF models, or user interface into any other software, application, library, hardware firmware, or repository;
+  (b) COMMERCIALIZE: Use this Software or any part thereof for any commercial, enterprise, government, business, or revenue-generating purpose, product, or service;
+  (c) MODIFY OR CREATE DERIVATIVES: Modify, adapt, translate, enhance, alter, reverse-engineer, decompile, disassemble, or create derivative works based upon this Software or any part thereof;
+  (d) REDISTRIBUTE: Distribute, publish, share, mirror, rent, lease, sublicense, transfer, or make available this Software to any third party via any medium, network, package manager, or platform;
+  (e) AI / MACHINE LEARNING TRAINING: Use this Software, its algorithms, source code, or documentation as input, training data, or fine-tuning material for any artificial intelligence, machine learning model, large language model (LLM), or automated code generation tool.
+
+3. OWNERSHIP AND INTELLECTUAL PROPERTY
+The Software, including all copyrights, patents, trade secrets, trademarks, proprietary algorithms (including the 2-anchor mirror disambiguation engine, Quadratic MAP solver, Hierarchical Spatial Gate, and RF ray-casting formulations), is and shall remain the exclusive intellectual property of Siddharth. All rights not expressly granted herein are strictly reserved by the copyright holder.
+
+4. TERMINATION
+This license is effective until terminated. Your rights under this license will terminate automatically and immediately without notice if you fail to comply with any of its terms. Upon termination, you must cease all access, delete all locally downloaded copies, and destroy all materials derived from this Software.
+
+5. DISCLAIMER OF WARRANTY
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE, TITLE, AND NON-INFRINGEMENT. IN NO EVENT SHALL THE COPYRIGHT HOLDER BE LIABLE FOR ANY CLAIM, DAMAGES, LOSS OF DATA, OR OTHER LIABILITY ARISING FROM OR IN CONNECTION WITH THE SOFTWARE OR THE VIEWING OR USE THEREOF.
