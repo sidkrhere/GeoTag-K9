@@ -218,7 +218,7 @@ Because distance is an exponential function of RSSI, symmetric Gaussian noise $X
 
 All constellation solvers are implemented in [`src/engine/multilateration.ts`](src/engine/multilateration.ts).
 
-### 4.1 3D Linear Least Squares (LLS) Solver
+### 4.1 3-Anchor Linear Least Squares (LLS) Solver
 
 Given $N \ge 3$ anchors at coordinates $(x_i, y_i)$ with measured ranges $r_i$, each circle equation is:
 
