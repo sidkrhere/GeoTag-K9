@@ -288,7 +288,7 @@ A joint Bayesian cost function balances kinematic extrapolation against the coll
 $$J(\mathbf{p}_i) = W_{\text{dist}} \cdot \|\mathbf{p}_i - \mathbf{p}_{\text{pred}}\|^2 + W_{\text{angle}} \cdot (1 - \cos(\theta_i - \theta_{\text{compass}}))$$
 
 Where:
-- $\mathbf{p}_{\text{pred}} = \mathbf{p}_{k-1} + \mathbf{v}_{k-1} \cdot \Delta t$ is the extrapolated position from kinematics.
+- $\mathbf{p}\_{\text{pred}} = \mathbf{p}\_{k-1} + \mathbf{v}_{k-1} \cdot \Delta t$ is the extrapolated position from kinematics.
 - $\theta_i = \text{atan2}(y_i - y_{k-1}, x_i - x_{k-1})$ is the candidate displacement bearing.
 - $\theta_{\text{compass}}$ is the actual dorsal heading measured by the collar's IMU.
 - $W_{\text{angle}} = 350.0$: Heavily penalizes candidates that require the dog to run backwards or jump sideways.
@@ -378,8 +378,8 @@ The interface is built using a **Gruvbox Light technical parchment aesthetic** (
 ### Installation
 ```bash
 # Clone repository
-git clone https://github.com/your-org/geotag-k9.git
-cd geotag-k9
+git clone https://github.com/sidkrhere/GeoTag-K9.git
+cd GeoTag-K9
 
 # Install dependencies
 npm install
