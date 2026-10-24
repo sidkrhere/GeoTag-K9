@@ -16,12 +16,14 @@ import {
   LapMetrics
 } from './types/simulation';
 import { getIITRoparPreset } from './engine/presetLayouts';
+import { resetDogTrajectory, resetAllTrackingState } from './engine/multilateration';
 
 export const App: React.FC = () => {
   const [activeTool, setActiveTool] = useState<ActiveTool>('SELECT_MOVE');
   const [autoWalk, setAutoWalk] = useState<boolean>(true);
   const [selectedEntityId, setSelectedEntityId] = useState<string | null>(null);
   const [resetKey, setResetKey] = useState<number>(0);
+  const [isConfigOpen, setIsConfigOpen] = useState<boolean>(false);
 
   // Lap & Lifetime Error Tracking
   const [lapMetrics, setLapMetrics] = useState<LapMetrics>({
@@ -35,8 +37,9 @@ export const App: React.FC = () => {
 
   // Simulation parameters & sliders
   const [config, setConfig] = useState<SimulationConfig>({
+    anchorRadiusMeters: 90,
     tier1RadiusMeters: 90,
-    tier2RadiusMeters: 45,
+    tier2RadiusMeters: 90,
     noiseStdDevDb: 3.0,
     wallAttenuationDb: 12,
     pathLossExponent: 3.0,
@@ -44,12 +47,14 @@ export const App: React.FC = () => {
     autoWalkSpeed: 2.5, // Nominal K9 Patrol Trot (2.5 m/s = 9.0 km/h)
     showRFRipples: true,
     showBackhaulBeams: true,
-    showCoverageHalos: true,
+    showCoverageHalos: false,
     showTrueDoggos: true,
     showEstimatedLocations: true,
     showHeadingVisionCone: true,
     showHistoricalBreadcrumbs: true,
-    imuSensorType: 'ECOMPASS_9DOF'
+    showGhostCandidates: false,
+    imuSensorType: 'ECOMPASS_9DOF',
+    disambiguationMode: 'QUADRATIC_MAP'
   });
 
   // Entities
@@ -65,6 +70,8 @@ export const App: React.FC = () => {
     const width = window.innerWidth || 1200;
     const height = window.innerHeight || 800;
     const preset = getIITRoparPreset(width, height);
+    resetAllTrackingState();
+    preset.tags.forEach(t => resetDogTrajectory(t.id, { x: t.x, y: t.y }));
     setBuildings(preset.buildings);
     setStops(preset.stops);
     setGeoCentre(preset.centre);
@@ -78,6 +85,8 @@ export const App: React.FC = () => {
     const width = window.innerWidth || 1200;
     const height = window.innerHeight || 800;
     const preset = getIITRoparPreset(width, height);
+    resetAllTrackingState();
+    preset.tags.forEach(t => resetDogTrajectory(t.id, { x: t.x, y: t.y }));
     setBuildings(preset.buildings);
     setStops(preset.stops);
     setGeoCentre(preset.centre);
@@ -100,6 +109,7 @@ export const App: React.FC = () => {
   };
 
   const handleClearAll = () => {
+    resetAllTrackingState();
     setBuildings([]);
     setStops([]);
     setGeoCentre(null);
@@ -135,10 +145,7 @@ export const App: React.FC = () => {
   };
 
   return (
-    <div className="relative w-screen h-screen overflow-hidden bg-[#010602] text-[#00ff41] select-none font-mono">
-      {/* 1950s CRT Scanline & Vignette Tube Filter */}
-      <div className="crt-overlay" />
-
+    <div className="relative w-screen h-screen overflow-hidden bg-[#fbf1c7] text-[#282828] select-none font-mono">
       {/* 1. Top Control Bar (Master Switchboard) */}
       <TopToolbar
         activeTool={activeTool}
@@ -150,21 +157,24 @@ export const App: React.FC = () => {
         onClearAll={handleClearAll}
         pathNodeCount={dogPath.length}
         onClearPath={() => setDogPath([])}
+        isConfigOpen={isConfigOpen}
+        onToggleConfig={() => setIsConfigOpen(prev => !prev)}
       />
 
-      {/* 2. Top-Left Tactical Display Unit (TDU) */}
+      {/* 2. Top-Left Live Telemetry HUD */}
       <TelemetryHUD
         trilaterationResults={trilaterationResults}
-        tier1Count={stops.filter(s => s.tier === 1).length}
-        tier2Count={stops.filter(s => s.tier === 2).length}
+        anchorCount={stops.length}
         dogCount={tags.length}
         lapMetrics={lapMetrics}
       />
 
-      {/* 3. Top-Right Analog RF Calibration Rack */}
+      {/* 3. Top-Right Calibration Rack */}
       <ConfigPanel
         config={config}
         setConfig={setConfig}
+        isOpen={isConfigOpen}
+        onToggle={() => setIsConfigOpen(prev => !prev)}
       />
 
       {/* 4. Center Plan Position Indicator (PPI) Radar Scope Canvas */}

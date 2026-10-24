@@ -3,7 +3,7 @@ export interface Point2D {
   y: number;
 }
 
-export type GeoStopTier = 1 | 2; // Tier 1: Solar Poles, Tier 2: Eateries & Hotspots
+export type GeoStopTier = 1 | 2; // UWB RTLS Anchor Nodes
 
 export interface GeoStop {
   id: string;
@@ -24,6 +24,8 @@ export interface GeoCentre {
 }
 
 export type ImuSensorType = 'ACCEL_ONLY' | 'IMU_6DOF' | 'ECOMPASS_9DOF' | 'GPS_RTK_BENCHMARK';
+
+export type DisambiguationMode = 'QUADRATIC_MAP' | 'HIERARCHICAL_GATE';
 
 export interface CompassHeadingData {
   headingDeg: number;         // 0° - 359° absolute azimuth (0° = N, 90° = E, 180° = S, 270° = W)
@@ -166,8 +168,9 @@ export interface TrilaterationResult {
 }
 
 export interface SimulationConfig {
-  tier1RadiusMeters: number; // Linked to top-right slider
-  tier2RadiusMeters: number; // Linked to top-right slider
+  anchorRadiusMeters: number; // Unified UWB Anchor Coverage Radius (default 90m)
+  tier1RadiusMeters?: number; // Backwards-compatibility alias
+  tier2RadiusMeters?: number; // Backwards-compatibility alias
   noiseStdDevDb: number;     // Channel noise (dB)
   wallAttenuationDb: number; // Attenuation per building wall
   pathLossExponent: number;  // Log-distance path loss exponent n (usually 2.5 - 3.5 outdoors)
@@ -180,7 +183,9 @@ export interface SimulationConfig {
   showEstimatedLocations: boolean;
   showHeadingVisionCone: boolean; // Canine forward radar / vision arc
   showHistoricalBreadcrumbs: boolean; // Historical trajectory tail
+  showGhostCandidates?: boolean;      // Toggle 2-anchor mirror ghost echo visualization
   imuSensorType: ImuSensorType;   // 'ECOMPASS_9DOF' or 'ACCEL_ONLY'
+  disambiguationMode?: DisambiguationMode;
 }
 
 export type ActiveTool =

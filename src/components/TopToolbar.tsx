@@ -11,6 +11,8 @@ interface TopToolbarProps {
   onClearAll: () => void;
   pathNodeCount: number;
   onClearPath: () => void;
+  isConfigOpen: boolean;
+  onToggleConfig: () => void;
 }
 
 export const TopToolbar: React.FC<TopToolbarProps> = ({
@@ -22,11 +24,12 @@ export const TopToolbar: React.FC<TopToolbarProps> = ({
   onResetPreset,
   onClearAll,
   pathNodeCount,
-  onClearPath
+  onClearPath,
+  isConfigOpen,
+  onToggleConfig
 }) => {
   const tools: {
     id: ActiveTool;
-    code: string;
     label: string;
     glyph: string;
     badge?: string;
@@ -35,81 +38,68 @@ export const TopToolbar: React.FC<TopToolbarProps> = ({
   }[] = [
     {
       id: 'SELECT_MOVE',
-      code: 'F1',
-      glyph: '⌖',
+      glyph: '↖',
       label: 'SELECT',
       colorClass: 'radar-key-cyan',
-      desc: 'Inspect target tracks, beacons, or obstacle vertices'
+      desc: 'Inspect or move dog, beacons, or building vertices'
     },
     {
       id: 'DRAW_BUILDING',
-      code: 'F2',
-      glyph: '▨',
-      label: 'PLOT WALL',
-      badge: 'RF ATTEN',
+      glyph: '▱',
+      label: 'WALL',
+      badge: '12dB',
       colorClass: 'radar-key-red',
-      desc: 'Plot RF obstacle boundaries; click origin to close'
+      desc: 'Draw RF attenuation walls; click start point to close'
     },
     {
       id: 'TRACE_PATH',
-      code: 'F3',
-      glyph: '☡',
-      label: 'TRACE RT',
+      glyph: '∿',
+      label: 'ROUTE',
       badge: pathNodeCount > 0 ? `${pathNodeCount}N` : undefined,
       colorClass: 'radar-key-green',
-      desc: 'Plot dog patrol turn waypoints for trajectory follow'
+      desc: 'Plot dog patrol waypoints'
     },
     {
       id: 'ADD_TIER1_STOP',
-      code: 'F4',
       glyph: '▲',
-      label: 'T-1 MAST',
+      label: 'ANCHOR',
       colorClass: 'radar-key-cyan',
-      desc: 'Deploy High-Power Solar Radar Mast (LoRa backhaul)'
-    },
-    {
-      id: 'ADD_TIER2_STOP',
-      code: 'F5',
-      glyph: '◈',
-      label: 'T-2 AUX',
-      colorClass: 'radar-key-orange',
-      desc: 'Deploy Ground Auxiliary Relay Beacon'
+      desc: 'Deploy UWB Tracking Anchor Node'
     },
     {
       id: 'ADD_GEOCENTRE',
-      code: 'F6',
       glyph: '⊕',
-      label: 'HQ BASE',
+      label: 'GATEWAY',
       badge: geoCentre ? '1/1' : '0/1',
       colorClass: 'radar-key-cyan',
-      desc: 'Central Command Bunker Localization Hub'
+      desc: 'Central Base Station Hub (Admin Block)'
     }
   ];
 
   return (
-    <header className="radar-panel fixed top-3 left-4 right-4 z-30 flex items-center justify-between px-3 py-2 font-mono">
-      {/* 1950s Stamped Identification Plate */}
-      <div className="flex items-center gap-3 pr-4 border-r border-[#00551a]">
-        <div className="w-8 h-8 border border-[#00f2fe] bg-[#001418] flex items-center justify-center text-[#00f2fe] font-bold text-sm glow-cyan">
+    <header className="radar-panel fixed top-3 left-4 right-4 z-30 flex items-center justify-between px-3 py-1.5 font-mono">
+      {/* Brand Identification */}
+      <div className="flex items-center gap-2.5 pr-3 border-r border-[#d5c4a1]">
+        <div className="w-7 h-7 border border-[#458588] bg-[#ebf2f2] flex items-center justify-center text-[#076678] font-bold text-xs rounded">
           K9
         </div>
         <div>
-          <div className="flex items-center gap-2">
-            <span className="text-xs font-bold tracking-widest text-[#00f2fe] glow-cyan">
-              RADAR PLOTTER MK-52
+          <div className="flex items-center gap-1.5">
+            <span className="text-xs font-bold tracking-wider text-[#282828]">
+              GeoTag-K9
             </span>
-            <span className="text-[9px] px-1.5 py-0.2 bg-[#001f22] border border-[#007780] text-[#00f2fe]">
-              AN/FPS-52
+            <span className="text-[9px] px-1 py-0.2 bg-[#ebdbb2] text-[#7c6f64] border border-[#d5c4a1] rounded font-semibold">
+              IIT ROPAR
             </span>
           </div>
-          <p className="text-[10px] text-[#00cc3a] hidden sm:block">
-            IIT-ROPAR SECTOR COMMAND // 2.4GHz + LoRa
+          <p className="text-[9px] text-[#7c6f64] hidden sm:block">
+            UWB Multilateration + 9DoF E-Compass Tracking
           </p>
         </div>
       </div>
 
       {/* Main Mode / Tool Switchboard */}
-      <nav aria-label="Radar Mode Selector" className="flex items-center gap-1.5 overflow-x-auto py-0.5 px-1">
+      <nav aria-label="Tool Selector" className="flex items-center gap-1 overflow-x-auto py-0.5 px-1">
         {tools.map((t) => {
           const isActive = activeTool === t.id;
           return (
@@ -119,13 +109,13 @@ export const TopToolbar: React.FC<TopToolbarProps> = ({
               title={t.desc}
               className={`radar-key ${t.colorClass} ${isActive ? 'radar-key-active' : ''}`}
             >
-              <span className="opacity-80 text-[10px]">{t.glyph}</span>
+              <span className="font-bold text-[11px]">{t.glyph}</span>
               <span>{t.label}</span>
               {t.badge && (
-                <span className={`text-[9px] px-1 border ${
+                <span className={`text-[8px] px-1 py-0.2 border rounded ${
                   isActive 
-                    ? 'border-[#010602] bg-[#010602] text-current' 
-                    : 'border-current bg-black/40'
+                    ? 'border-[#fbf1c7] bg-[#fbf1c7] text-[#282828]' 
+                    : 'border-[#bdae93] bg-[#ebdbb2] text-[#504945]'
                 }`}>
                   {t.badge}
                 </span>
@@ -135,44 +125,53 @@ export const TopToolbar: React.FC<TopToolbarProps> = ({
         })}
       </nav>
 
-      {/* Rotary Action Switches & System Commands */}
-      <div className="flex items-center gap-1.5 pl-3 border-l border-[#00551a]">
-        {/* Sweep / Auto-Walk Toggle */}
+      {/* Control Action Buttons */}
+      <div className="flex items-center gap-1.5 pl-3 border-l border-[#d5c4a1]">
+        {/* Patrol Toggle */}
         <button
           onClick={() => setAutoWalk((prev: boolean) => !prev)}
-          title={autoWalk ? 'Halt autonomous dog patrol' : 'Engage autonomous dog patrol'}
+          title={autoWalk ? 'Pause canine patrol movement' : 'Run autonomous canine patrol'}
           className={`radar-key radar-key-green ${autoWalk ? 'radar-key-active' : ''}`}
         >
-          <span>{autoWalk ? '▶ PATROL: RUN' : '⏸ PATROL: HALT'}</span>
+          <span>{autoWalk ? '▶ PATROL' : '⏸ PAUSED'}</span>
         </button>
 
-        {/* Clear Route Button */}
+        {/* Clear Route */}
         {pathNodeCount > 0 && (
           <button
             onClick={onClearPath}
-            title="Purge plotted patrol waypoints"
+            title="Clear plotted patrol route"
             className="radar-key radar-key-red text-[10px]"
           >
-            <span>PURGE RT</span>
+            <span>CLEAR ROUTE</span>
           </button>
         )}
 
-        {/* IIT Ropar Preset Reset */}
+        {/* Reset Preset */}
         <button
           onClick={onResetPreset}
-          title="Re-zero to IIT Ropar Standard Grid Layout"
-          className="radar-key radar-key-orange text-[10px]"
+          title="Reset to default IIT Ropar Layout"
+          className="radar-key text-[10px]"
         >
-          <span>PRESET: ROPAR</span>
+          <span>RESET</span>
         </button>
 
-        {/* Zero Scope / Clear All */}
+        {/* Clear All */}
         <button
           onClick={onClearAll}
-          title="Emergency Master Clear / Zero Scope"
+          title="Clear all entities"
           className="radar-key radar-key-red text-[10px]"
         >
-          <span>ZERO SCOPE</span>
+          <span>CLEAR ALL</span>
+        </button>
+
+        {/* Config Panel Toggle */}
+        <button
+          onClick={onToggleConfig}
+          title="Toggle Simulation Config & Calibration Panel"
+          className={`radar-key radar-key-orange text-[10px] ${isConfigOpen ? 'radar-key-active' : ''}`}
+        >
+          <span>⚙ CONFIG</span>
         </button>
       </div>
     </header>

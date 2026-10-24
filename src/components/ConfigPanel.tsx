@@ -4,131 +4,131 @@ import { SimulationConfig } from '../types/simulation';
 interface ConfigPanelProps {
   config: SimulationConfig;
   setConfig: React.Dispatch<React.SetStateAction<SimulationConfig>>;
+  isOpen?: boolean;
+  onToggle?: () => void;
 }
 
 export const ConfigPanel: React.FC<ConfigPanelProps> = ({
   config,
-  setConfig
+  setConfig,
+  isOpen,
+  onToggle
 }) => {
-  const [isExpanded, setIsExpanded] = useState(true);
+  const [internalExpanded, setInternalExpanded] = useState(false);
+  const isExpanded = isOpen !== undefined ? isOpen : internalExpanded;
+  const handleToggle = onToggle || (() => setInternalExpanded(prev => !prev));
+
+  if (!isExpanded) {
+    return null; // Kept completely hidden when closed for maximum screen decluttering
+  }
 
   return (
     <aside 
-      aria-label="Analog Calibration Rack" 
-      className="radar-panel fixed top-16 right-4 z-20 w-80 font-mono text-[#00ff41]"
+      aria-label="Configuration & Calibration Rack" 
+      className="radar-panel fixed top-16 right-4 z-20 w-80 font-mono text-[#282828]"
     >
-      {/* 1950s Stamped Faceplate Header */}
+      {/* Header */}
       <div 
-        onClick={() => setIsExpanded(!isExpanded)}
+        onClick={handleToggle}
         className="panel-stamped-header cursor-pointer select-none"
       >
         <div className="flex items-center gap-2">
-          <span className="text-xs font-bold tracking-widest text-[#00f2fe] glow-cyan">
-            CALIBRATION RACK // AN-CAL-4
+          <span className="text-xs font-bold tracking-wider text-[#282828]">
+            SYSTEM CONFIGURATION & CALIBRATION
           </span>
         </div>
-        <button className="text-[#00aa33] hover:text-[#00ff41] text-xs font-bold" aria-label="Toggle Panel">
-          {isExpanded ? '[-]' : '[+]'}
+        <button className="text-[#7c6f64] hover:text-[#282828] text-xs font-bold px-1" aria-label="Close Panel">
+          ✕
         </button>
       </div>
 
-      {isExpanded && (
-        <div className="p-3.5 space-y-3.5 max-h-[calc(100vh-140px)] overflow-y-auto text-[11px] bg-[#020b04]">
-          {/* Section 1: Beacon Range Potentiometers (Cyan for T1, Orange for T2) */}
-          <div className="space-y-2.5">
-            <div className="text-[10px] text-[#00aa33] font-bold tracking-wider">
-              --- BEACON TRANSMISSION RADII ---
-            </div>
-
-            {/* Tier 1 Mast Radius - Electric Cyan */}
-            <div className="space-y-1">
-              <div className="flex justify-between text-xs">
-                <span className="text-[#00f2fe] font-semibold">T-1 SOLAR MAST:</span>
-                <span className="text-[#00f2fe] font-bold glow-cyan">{config.tier1RadiusMeters} M</span>
-              </div>
-              <input
-                type="range"
-                className="slider-cyan"
-                min="30"
-                max="180"
-                step="5"
-                value={config.tier1RadiusMeters}
-                onChange={(e) => setConfig(prev => ({ ...prev, tier1RadiusMeters: Number(e.target.value) }))}
-              />
-              <span className="text-[9px] text-[#007780] block">HIGH MAST SOLAR POLE (LoRa BACKHAUL)</span>
-            </div>
-
-            {/* Tier 2 Aux Radius - Amber/Orange */}
-            <div className="space-y-1">
-              <div className="flex justify-between text-xs">
-                <span className="text-[#ff9900] font-semibold">T-2 AUX RELAY:</span>
-                <span className="text-[#ff9900] font-bold glow-orange">{config.tier2RadiusMeters} M</span>
-              </div>
-              <input
-                type="range"
-                className="slider-orange"
-                min="15"
-                max="90"
-                step="5"
-                value={config.tier2RadiusMeters}
-                onChange={(e) => setConfig(prev => ({ ...prev, tier2RadiusMeters: Number(e.target.value) }))}
-              />
-              <span className="text-[9px] text-[#804c00] block">GROUND LEVEL AUXILIARY BEACON</span>
-            </div>
+      <div className="p-3.5 space-y-3 max-h-[calc(100vh-140px)] overflow-y-auto text-[11px] bg-[#f2e5bc]">
+        {/* Section 1: Anchor Range Sliders */}
+        <div className="space-y-2">
+          <div className="text-[10px] text-[#79740e] font-bold tracking-wider uppercase">
+            --- Anchor Transmission Coverage ---
           </div>
 
-          {/* Section 2: RF Channel Physics & Noise (Orange for Noise, Red for Wall) */}
-          <div className="space-y-2.5 pt-2 border-t border-[#003310]">
-            <div className="text-[10px] text-[#00aa33] font-bold tracking-wider">
-              --- RF CHANNEL ATTENUATION & NOISE ---
+          {/* Unified Anchor Coverage Radius */}
+          <div className="space-y-1 p-2 bg-[#fbf1c7] rounded border border-[#d5c4a1]">
+            <div className="flex justify-between text-xs">
+              <span className="text-[#076678] font-bold">ANCHOR COVERAGE RADIUS:</span>
+              <span className="text-[#076678] font-bold font-mono tabular-nums">{config.anchorRadiusMeters ?? 90} M</span>
             </div>
+            <input
+              type="range"
+              className="slider-cyan"
+              min="30"
+              max="180"
+              step="5"
+              value={config.anchorRadiusMeters ?? 90}
+              onChange={(e) => {
+                const val = Number(e.target.value);
+                setConfig(prev => ({
+                  ...prev,
+                  anchorRadiusMeters: val,
+                  tier1RadiusMeters: val,
+                  tier2RadiusMeters: val
+                }));
+              }}
+            />
+            <span className="text-[9px] text-[#7c6f64] block">UNIFIED UWB ANCHOR TRANSMISSION HORIZON (NOMINAL 90M)</span>
+          </div>
+        </div>
 
-            {/* Noise StdDev - Orange */}
-            <div className="space-y-1">
-              <div className="flex justify-between text-xs">
-                <span className="text-[#ff9900]">CHANNEL NOISE POT:</span>
-                <span className="text-[#ff9900] font-bold">{config.noiseStdDevDb} dB</span>
-              </div>
-              <input
-                type="range"
-                className="slider-orange"
-                min="0"
-                max="12"
-                step="0.5"
-                value={config.noiseStdDevDb}
-                onChange={(e) => setConfig(prev => ({ ...prev, noiseStdDevDb: Number(e.target.value) }))}
-              />
-              <span className="text-[9px] text-[#804c00] block">MULTIPATH, SHADOWING & NOISE FLUX</span>
-            </div>
-
-            {/* Building Wall Attenuation - Alert Red */}
-            <div className="space-y-1">
-              <div className="flex justify-between text-xs">
-                <span className="text-[#ff3b30] font-semibold">WALL ATTENUATION POT:</span>
-                <span className="text-[#ff3b30] font-bold glow-red">{config.wallAttenuationDb} dB/WALL</span>
-              </div>
-              <input
-                type="range"
-                className="slider-red"
-                min="0"
-                max="25"
-                step="1"
-                value={config.wallAttenuationDb}
-                onChange={(e) => setConfig(prev => ({ ...prev, wallAttenuationDb: Number(e.target.value) }))}
-              />
-              <span className="text-[9px] text-[#801d18] block">RF PENETRATION LOSS IN DRAWN STRUCTURES</span>
-            </div>
+        {/* Section 2: RF Channel Physics & Noise */}
+        <div className="space-y-2 pt-2 border-t border-[#d5c4a1]">
+          <div className="text-[10px] text-[#79740e] font-bold tracking-wider uppercase">
+            --- RF Channel Physics & Loss ---
           </div>
 
-          {/* Section 3: Target Patrol Speed & Stepped Gears (Phosphor Green) */}
-          <div className="space-y-2 pt-2 border-t border-[#003310]">
-            <div className="text-[10px] text-[#00aa33] font-bold tracking-wider">
-              --- TARGET PATROL DYNAMICS ---
+          {/* Noise StdDev */}
+          <div className="space-y-1 p-2 bg-[#fbf1c7] rounded border border-[#d5c4a1]">
+            <div className="flex justify-between text-xs">
+              <span className="text-[#af3a03] font-bold">CHANNEL NOISE:</span>
+              <span className="text-[#af3a03] font-bold font-mono tabular-nums">{config.noiseStdDevDb} dB</span>
             </div>
+            <input
+              type="range"
+              className="slider-orange"
+              min="0"
+              max="12"
+              step="0.5"
+              value={config.noiseStdDevDb}
+              onChange={(e) => setConfig(prev => ({ ...prev, noiseStdDevDb: Number(e.target.value) }))}
+            />
+            <span className="text-[9px] text-[#7c6f64] block">MULTIPATH, SHADOWING & NOISE FLUX</span>
+          </div>
 
+          {/* Building Wall Attenuation */}
+          <div className="space-y-1 p-2 bg-[#fbf1c7] rounded border border-[#d5c4a1]">
+            <div className="flex justify-between text-xs">
+              <span className="text-[#cc241d] font-bold">WALL ATTENUATION:</span>
+              <span className="text-[#cc241d] font-bold font-mono tabular-nums">{config.wallAttenuationDb} dB/WALL</span>
+            </div>
+            <input
+              type="range"
+              className="slider-red"
+              min="0"
+              max="25"
+              step="1"
+              value={config.wallAttenuationDb}
+              onChange={(e) => setConfig(prev => ({ ...prev, wallAttenuationDb: Number(e.target.value) }))}
+            />
+            <span className="text-[9px] text-[#7c6f64] block">RF PENETRATION LOSS IN OBSTACLES</span>
+          </div>
+        </div>
+
+        {/* Section 3: Target Patrol Speed */}
+        <div className="space-y-2 pt-2 border-t border-[#d5c4a1]">
+          <div className="text-[10px] text-[#79740e] font-bold tracking-wider uppercase">
+            --- Target Dynamics & Patrol ---
+          </div>
+
+          <div className="p-2 bg-[#fbf1c7] rounded border border-[#d5c4a1] space-y-1.5">
             <div className="flex justify-between items-baseline text-xs">
-              <span className="text-[#00ff41]">PATROL VELOCITY:</span>
-              <span className="text-[#00ff41] font-bold glow-green">
+              <span className="text-[#282828] font-semibold">PATROL SPEED:</span>
+              <span className="text-[#79740e] font-bold font-mono tabular-nums">
                 {(config.autoWalkSpeed ?? 2.5).toFixed(1)} M/S ({(((config.autoWalkSpeed ?? 2.5) * 3.6)).toFixed(1)} KM/H)
               </span>
             </div>
@@ -163,95 +163,100 @@ export const ConfigPanel: React.FC<ConfigPanelProps> = ({
               })}
             </div>
           </div>
+        </div>
 
-          {/* Section 4: CRT Scope Visual Filter Toggles */}
-          <div className="space-y-2 pt-2 border-t border-[#003310]">
-            <div className="text-[10px] text-[#00aa33] font-bold tracking-wider">
-              --- SCOPE DISPLAY FILTERS ---
-            </div>
-
-            <div className="grid grid-cols-2 gap-1.5 text-xs">
-              <button
-                onClick={() => setConfig(prev => ({ ...prev, showCoverageHalos: !prev.showCoverageHalos }))}
-                className={`radar-key radar-key-cyan text-[10px] justify-between ${config.showCoverageHalos ? 'radar-key-active' : ''}`}
-              >
-                <span>BEACON HALOS</span>
-                <span>{config.showCoverageHalos ? '[ON]' : '[OFF]'}</span>
-              </button>
-
-              <button
-                onClick={() => setConfig(prev => ({ ...prev, showRFRipples: !prev.showRFRipples }))}
-                className={`radar-key radar-key-orange text-[10px] justify-between ${config.showRFRipples ? 'radar-key-active' : ''}`}
-              >
-                <span>RF STROBES</span>
-                <span>{config.showRFRipples ? '[ON]' : '[OFF]'}</span>
-              </button>
-
-              <button
-                onClick={() => setConfig(prev => ({ ...prev, showBackhaulBeams: !prev.showBackhaulBeams }))}
-                className={`radar-key radar-key-cyan text-[10px] justify-between ${config.showBackhaulBeams ? 'radar-key-active' : ''}`}
-              >
-                <span>LORA BEAMS</span>
-                <span>{config.showBackhaulBeams ? '[ON]' : '[OFF]'}</span>
-              </button>
-
-              <button
-                onClick={() => setConfig(prev => ({ ...prev, showEstimatedLocations: !prev.showEstimatedLocations }))}
-                className={`radar-key radar-key-green text-[10px] justify-between ${config.showEstimatedLocations ? 'radar-key-active' : ''}`}
-              >
-                <span>TRACK RETICLE</span>
-                <span>{config.showEstimatedLocations ? '[ON]' : '[OFF]'}</span>
-              </button>
-
-              <button
-                onClick={() => setConfig(prev => ({ ...prev, showHeadingVisionCone: !prev.showHeadingVisionCone }))}
-                className={`radar-key radar-key-cyan text-[10px] justify-between col-span-2 ${config.showHeadingVisionCone ? 'radar-key-active' : ''}`}
-              >
-                <span>FORWARD SENSOR CONE (60° FOV)</span>
-                <span>{config.showHeadingVisionCone ? '[ON]' : '[OFF]'}</span>
-              </button>
-
-              <button
-                onClick={() => setConfig(prev => ({ ...prev, showHistoricalBreadcrumbs: !prev.showHistoricalBreadcrumbs }))}
-                className={`radar-key radar-key-green text-[10px] justify-between col-span-2 ${config.showHistoricalBreadcrumbs ? 'radar-key-active' : ''}`}
-              >
-                <span>PHOSPHOR TRAIL (15 FIXES)</span>
-                <span>{config.showHistoricalBreadcrumbs ? '[ON]' : '[OFF]'}</span>
-              </button>
-            </div>
+        {/* Section 4: Display & Visual Filters */}
+        <div className="space-y-2 pt-2 border-t border-[#d5c4a1]">
+          <div className="text-[10px] text-[#79740e] font-bold tracking-wider uppercase">
+            --- Display & Visualization ---
           </div>
 
-          {/* Section 5: Dorsal Collar Heading Sensor */}
-          <div className="space-y-2 pt-2 border-t border-[#003310]">
-            <div className="text-[10px] text-[#00aa33] font-bold tracking-wider">
-              --- DORSAL SENSOR CONFIG ---
-            </div>
-            <div className="grid grid-cols-3 gap-1 text-[10px]">
-              <button
-                onClick={() => setConfig(prev => ({ ...prev, imuSensorType: 'ECOMPASS_9DOF' }))}
-                className={`radar-key radar-key-cyan text-[10px] py-1 ${config.imuSensorType === 'ECOMPASS_9DOF' ? 'radar-key-active' : ''}`}
-              >
-                E-COMPASS
-              </button>
-              <button
-                onClick={() => setConfig(prev => ({ ...prev, imuSensorType: 'IMU_6DOF' }))}
-                className={`radar-key radar-key-cyan text-[10px] py-1 ${config.imuSensorType === 'IMU_6DOF' ? 'radar-key-active' : ''}`}
-              >
-                6-DOF IMU
-              </button>
-              <button
-                onClick={() => setConfig(prev => ({ ...prev, imuSensorType: 'GPS_RTK_BENCHMARK' }))}
-                className={`radar-key radar-key-cyan text-[10px] py-1 ${config.imuSensorType === 'GPS_RTK_BENCHMARK' ? 'radar-key-active' : ''}`}
-              >
-                RTK BENCH
-              </button>
-            </div>
-            <p className="text-[9px] text-[#007780] leading-tight">
-              Dorsal spine heading locks forward vector to resolve 2-anchor baseline mirror ambiguities.
-            </p>
+          <div className="grid grid-cols-2 gap-1.5 text-xs">
+            <button
+              onClick={() => setConfig(prev => ({ ...prev, showCoverageHalos: !prev.showCoverageHalos }))}
+              className={`radar-key radar-key-cyan text-[10px] justify-between ${config.showCoverageHalos ? 'radar-key-active' : ''}`}
+            >
+              <span>ANCHOR HALOS</span>
+              <span>{config.showCoverageHalos ? '[ON]' : '[OFF]'}</span>
+            </button>
+
+            <button
+              onClick={() => setConfig(prev => ({ ...prev, showRFRipples: !prev.showRFRipples }))}
+              className={`radar-key radar-key-orange text-[10px] justify-between ${config.showRFRipples ? 'radar-key-active' : ''}`}
+            >
+              <span>RF WAVEFRONTS</span>
+              <span>{config.showRFRipples ? '[ON]' : '[OFF]'}</span>
+            </button>
+
+            <button
+              onClick={() => setConfig(prev => ({ ...prev, showBackhaulBeams: !prev.showBackhaulBeams }))}
+              className={`radar-key radar-key-cyan text-[10px] justify-between ${config.showBackhaulBeams ? 'radar-key-active' : ''}`}
+            >
+              <span>UPLINK BEAMS</span>
+              <span>{config.showBackhaulBeams ? '[ON]' : '[OFF]'}</span>
+            </button>
+
+            <button
+              onClick={() => setConfig(prev => ({ ...prev, showEstimatedLocations: !prev.showEstimatedLocations }))}
+              className={`radar-key radar-key-orange text-[10px] justify-between ${config.showEstimatedLocations ? 'radar-key-active' : ''}`}
+            >
+              <span>TRACK RETICLE</span>
+              <span>{config.showEstimatedLocations ? '[ON]' : '[OFF]'}</span>
+            </button>
+
+            {/* Ghost Candidate Visualization Toggle */}
+            <button
+              onClick={() => setConfig(prev => ({ ...prev, showGhostCandidates: !prev.showGhostCandidates }))}
+              className={`radar-key text-[10px] justify-between col-span-2 ${config.showGhostCandidates ? 'radar-key-active' : ''}`}
+            >
+              <span>MIRROR HYPOTHESES (GHOST ECHOES)</span>
+              <span>{config.showGhostCandidates ? '[SHOWN]' : '[HIDDEN]'}</span>
+            </button>
+
+            <button
+              onClick={() => setConfig(prev => ({ ...prev, showHeadingVisionCone: !prev.showHeadingVisionCone }))}
+              className={`radar-key radar-key-cyan text-[10px] justify-between col-span-2 ${config.showHeadingVisionCone ? 'radar-key-active' : ''}`}
+            >
+              <span>HEADING CONE (60° FOV)</span>
+              <span>{config.showHeadingVisionCone ? '[ON]' : '[OFF]'}</span>
+            </button>
+
+            <button
+              onClick={() => setConfig(prev => ({ ...prev, showHistoricalBreadcrumbs: !prev.showHistoricalBreadcrumbs }))}
+              className={`radar-key radar-key-green text-[10px] justify-between col-span-2 ${config.showHistoricalBreadcrumbs ? 'radar-key-active' : ''}`}
+            >
+              <span>PATROL BREADCRUMBS</span>
+              <span>{config.showHistoricalBreadcrumbs ? '[ON]' : '[OFF]'}</span>
+            </button>
           </div>
         </div>
-      )}
+
+        {/* Section 5: 2-Anchor Disambiguation Mode */}
+        <div className="space-y-2 pt-2 border-t border-[#d5c4a1]">
+          <div className="text-[10px] text-[#79740e] font-bold tracking-wider uppercase">
+            --- 2-Anchor Disambiguation ---
+          </div>
+          <div className="grid grid-cols-2 gap-1 text-[10px]">
+            <button
+              onClick={() => setConfig(prev => ({ ...prev, disambiguationMode: 'QUADRATIC_MAP' }))}
+              className={`radar-key radar-key-cyan text-[10px] py-1 ${(!config.disambiguationMode || config.disambiguationMode === 'QUADRATIC_MAP') ? 'radar-key-active' : ''}`}
+            >
+              QUADRATIC MAP
+            </button>
+            <button
+              onClick={() => setConfig(prev => ({ ...prev, disambiguationMode: 'HIERARCHICAL_GATE' }))}
+              className={`radar-key radar-key-cyan text-[10px] py-1 ${config.disambiguationMode === 'HIERARCHICAL_GATE' ? 'radar-key-active' : ''}`}
+            >
+              SPATIAL GATE
+            </button>
+          </div>
+          <p className="text-[9px] text-[#7c6f64] leading-tight">
+            {(!config.disambiguationMode || config.disambiguationMode === 'QUADRATIC_MAP')
+              ? 'Quadratic MAP: Continuous Bayesian cost (3d + 2d²); soft at crossings, crushes distant leaps.'
+              : 'Hierarchical Gate: Closer candidate wins unconditionally if Δd > 1.5m; compass acts as tie-breaker.'}
+          </p>
+        </div>
+      </div>
     </aside>
   );
 };

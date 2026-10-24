@@ -11,7 +11,7 @@ import {
   SignalMeasurement,
   LapMetrics
 } from '../types/simulation';
-import { distance } from '../engine/geometry';
+import { distance, isPointInPolygon } from '../engine/geometry';
 import { calculateSignalMeasurement } from '../engine/rfPropagation';
 import { solveTrilateration, resetDogTrajectory } from '../engine/multilateration';
 
@@ -96,6 +96,7 @@ export const SimulationCanvas: React.FC<SimulationCanvasProps> = ({
 
   // Discrete Solver Packet Clock (~3 Hz / 300ms) decoupled from 60 FPS animation loop
   const lastSolverRunTimeRef = useRef<number>(0);
+  const lastFrameTimeRef = useRef<number>(performance.now());
   const cachedNetworkStateRef = useRef<{ results: TrilaterationResult[]; allSignals: SignalMeasurement[] }>({
     results: [],
     allSignals: []
@@ -132,6 +133,15 @@ export const SimulationCanvas: React.FC<SimulationCanvasProps> = ({
 
   // Reset lap metrics whenever preset or layout is cleared/reset
   useEffect(() => {
+    unifiedDisplayCoordRef.current.clear();
+    smoothedDualCandidatesRef.current.clear();
+    anchorTransitionMapRef.current.clear();
+    cachedNetworkStateRef.current = { results: [], allSignals: [] };
+    tags.forEach(t => {
+      resetDogTrajectory(t.id, { x: t.x, y: t.y });
+      unifiedDisplayCoordRef.current.set(t.id, { x: t.x, y: t.y });
+    });
+
     lapTrackerRef.current = {
       currentLapNumber: 1,
       currentLapErrorSum: 0,
@@ -366,22 +376,21 @@ export const SimulationCanvas: React.FC<SimulationCanvasProps> = ({
     const render = () => {
       if (!isMounted) return;
 
+      const nowMs = performance.now();
+      const frameDt = Math.max(0.001, Math.min(0.05, (nowMs - lastFrameTimeRef.current) / 1000));
+      lastFrameTimeRef.current = nowMs;
+
       pulsePhaseRef.current += 0.04;
       const pulse = Math.sin(pulsePhaseRef.current);
       const flowOffset = (pulsePhaseRef.current * 25) % 40;
 
-      // 1. Clear Canvas & Fill Tube Dark Black
-      ctx.fillStyle = '#010602';
+      // 1. Clear Canvas & Fill Gruvbox Light Paper Parchment
+      ctx.fillStyle = '#fbf1c7';
       ctx.fillRect(0, 0, canvas.width, canvas.height);
 
-      // 1950s Plan Position Indicator (PPI) Scope Geometry
-      const scopeCx = geoCentre ? geoCentre.x : canvas.width / 2;
-      const scopeCy = geoCentre ? geoCentre.y : canvas.height / 2;
-      const maxScopeR = Math.max(canvas.width, canvas.height);
-
-      // A. Fine Coordinate Reticle Grid (Intersections with '+' pips)
+      // Fine Technical Coordinate Grid
       const gridSize = 40;
-      ctx.strokeStyle = 'rgba(0, 255, 65, 0.04)';
+      ctx.strokeStyle = 'rgba(189, 174, 147, 0.4)';
       ctx.lineWidth = 1;
       for (let x = 0; x < canvas.width; x += gridSize) {
         ctx.beginPath();
@@ -395,111 +404,6 @@ export const SimulationCanvas: React.FC<SimulationCanvasProps> = ({
         ctx.lineTo(canvas.width, y);
         ctx.stroke();
       }
-
-      // B. Concentric Calibrated Radar Range Rings (25m to 250m)
-      const rangeIntervalsM = [25, 50, 75, 100, 125, 150, 175, 200, 250];
-      for (const rM of rangeIntervalsM) {
-        const rPx = rM * config.pixelsPerMeter;
-        if (rPx > maxScopeR) continue;
-
-        const isMajor = rM % 50 === 0;
-        ctx.beginPath();
-        ctx.arc(scopeCx, scopeCy, rPx, 0, Math.PI * 2);
-        ctx.strokeStyle = isMajor ? 'rgba(0, 255, 65, 0.22)' : 'rgba(0, 255, 65, 0.08)';
-        ctx.lineWidth = isMajor ? 1.5 : 1;
-        if (!isMajor) {
-          ctx.setLineDash([3, 5]);
-        }
-        ctx.stroke();
-        ctx.setLineDash([]);
-
-        // Range callout tag along East Axis
-        ctx.fillStyle = 'rgba(0, 255, 65, 0.45)';
-        ctx.font = '9px monospace';
-        ctx.fillText(`RNG ${rM}M`, scopeCx + rPx + 4, scopeCy - 3);
-      }
-
-      // C. Cardinal Radar Crosshairs (North, South, East, West axes)
-      ctx.beginPath();
-      ctx.moveTo(scopeCx, 0); ctx.lineTo(scopeCx, canvas.height);
-      ctx.moveTo(0, scopeCy); ctx.lineTo(canvas.width, scopeCy);
-      ctx.strokeStyle = 'rgba(0, 255, 65, 0.16)';
-      ctx.lineWidth = 1;
-      ctx.stroke();
-
-      // Cardinal axis tick marks every 10 meters
-      const tickStepPx = 10 * config.pixelsPerMeter;
-      ctx.strokeStyle = 'rgba(0, 255, 65, 0.28)';
-      for (let d = tickStepPx; d < maxScopeR; d += tickStepPx) {
-        // North/South ticks
-        ctx.beginPath();
-        ctx.moveTo(scopeCx - 3, scopeCy - d); ctx.lineTo(scopeCx + 3, scopeCy - d);
-        ctx.moveTo(scopeCx - 3, scopeCy + d); ctx.lineTo(scopeCx + 3, scopeCy + d);
-        // East/West ticks
-        ctx.moveTo(scopeCx + d, scopeCy - 3); ctx.lineTo(scopeCx + d, scopeCy + 3);
-        ctx.moveTo(scopeCx - d, scopeCy - 3); ctx.lineTo(scopeCx - d, scopeCy + 3);
-        ctx.stroke();
-      }
-
-      // D. Outer Azimuth Degree Dial (000° to 350° at 10° intervals)
-      const dialRadius = Math.min(canvas.width, canvas.height) * 0.44;
-      if (dialRadius > 140) {
-        ctx.beginPath();
-        ctx.arc(scopeCx, scopeCy, dialRadius, 0, Math.PI * 2);
-        ctx.strokeStyle = 'rgba(0, 255, 65, 0.3)';
-        ctx.lineWidth = 1.5;
-        ctx.stroke();
-
-        ctx.font = '8.5px monospace';
-        ctx.textAlign = 'center';
-        ctx.textBaseline = 'middle';
-        ctx.fillStyle = 'rgba(0, 255, 65, 0.6)';
-
-        for (let deg = 0; deg < 360; deg += 10) {
-          const rad = ((deg - 90) * Math.PI) / 180;
-          const isMajorDeg = deg % 30 === 0;
-          const tickLen = isMajorDeg ? 9 : 4;
-          const x1 = scopeCx + Math.cos(rad) * dialRadius;
-          const y1 = scopeCy + Math.sin(rad) * dialRadius;
-          const x2 = scopeCx + Math.cos(rad) * (dialRadius - tickLen);
-          const y2 = scopeCy + Math.sin(rad) * (dialRadius - tickLen);
-
-          ctx.beginPath();
-          ctx.moveTo(x1, y1);
-          ctx.lineTo(x2, y2);
-          ctx.strokeStyle = isMajorDeg ? 'rgba(0, 255, 65, 0.6)' : 'rgba(0, 255, 65, 0.25)';
-          ctx.lineWidth = isMajorDeg ? 1.5 : 1;
-          ctx.stroke();
-
-          if (isMajorDeg) {
-            const labelR = dialRadius + 14;
-            const lx = scopeCx + Math.cos(rad) * labelR;
-            const ly = scopeCy + Math.sin(rad) * labelR;
-            const degStr = deg === 0 ? '000°' : deg < 100 ? `0${deg}°` : `${deg}°`;
-            ctx.fillText(degStr, lx, ly);
-          }
-        }
-      }
-
-      // E. Rotating Radar Sweep Beam & Phosphor Persistence Wedge
-      const sweepAngle = (pulsePhaseRef.current * 0.45) % (Math.PI * 2);
-      ctx.beginPath();
-      ctx.moveTo(scopeCx, scopeCy);
-      ctx.arc(scopeCx, scopeCy, maxScopeR, sweepAngle - 0.4, sweepAngle);
-      ctx.closePath();
-      const sweepGrad = ctx.createRadialGradient(scopeCx, scopeCy, 10, scopeCx, scopeCy, maxScopeR);
-      sweepGrad.addColorStop(0, 'rgba(0, 255, 65, 0.12)');
-      sweepGrad.addColorStop(1, 'rgba(0, 255, 65, 0.01)');
-      ctx.fillStyle = sweepGrad;
-      ctx.fill();
-
-      // Sharp sweep line
-      ctx.beginPath();
-      ctx.moveTo(scopeCx, scopeCy);
-      ctx.lineTo(scopeCx + Math.cos(sweepAngle) * maxScopeR, scopeCy + Math.sin(sweepAngle) * maxScopeR);
-      ctx.strokeStyle = 'rgba(0, 255, 65, 0.85)';
-      ctx.lineWidth = 1.8;
-      ctx.stroke();
 
       // Discrete Packet Clock: Multilateration solver update at ~12.5 Hz (~80ms)
       const now = performance.now();
@@ -526,14 +430,14 @@ export const SimulationCanvas: React.FC<SimulationCanvasProps> = ({
 
         if (b.closed) {
           ctx.closePath();
-          // Dark red vector chassis fill
-          ctx.fillStyle = 'rgba(40, 10, 8, 0.45)';
+          // Warm Gruvbox Sandstone fill
+          ctx.fillStyle = 'rgba(235, 219, 178, 0.75)';
           ctx.fill();
-          ctx.strokeStyle = '#ff3b30';
+          ctx.strokeStyle = '#cc241d';
           ctx.lineWidth = 1.8;
           ctx.stroke();
 
-          // 45-degree diagonal radar hatching inside the obstacle (Alert Red)
+          // 45-degree diagonal radar hatching inside the obstacle
           ctx.save();
           ctx.beginPath();
           ctx.moveTo(b.points[0].x, b.points[0].y);
@@ -552,7 +456,7 @@ export const SimulationCanvas: React.FC<SimulationCanvasProps> = ({
             if (p.y > maxY) maxY = p.y;
           }
           const bH = maxY - minY;
-          ctx.strokeStyle = 'rgba(255, 59, 48, 0.18)';
+          ctx.strokeStyle = 'rgba(204, 36, 29, 0.2)';
           ctx.lineWidth = 1;
           for (let lx = minX - bH; lx < maxX + bH; lx += 14) {
             ctx.beginPath();
@@ -562,23 +466,27 @@ export const SimulationCanvas: React.FC<SimulationCanvasProps> = ({
           }
           ctx.restore();
 
-          // Centroid Military Stamped Label (Alert Red)
+          // Centroid Label
           let cx = 0, cy = 0;
           for (const p of b.points) { cx += p.x; cy += p.y; }
           cx /= b.points.length;
           cy /= b.points.length;
 
-          ctx.fillStyle = '#ff3b30';
+          const hasGatewayInside = geoCentre && isPointInPolygon({ x: geoCentre.x, y: geoCentre.y }, b.points);
+          const labelY = hasGatewayInside ? cy - 36 : cy;
+          const subLabelY = hasGatewayInside ? cy - 23 : cy + 13;
+
+          ctx.fillStyle = '#9d0006';
           ctx.font = 'bold 10px monospace';
           ctx.textAlign = 'center';
           ctx.textBaseline = 'alphabetic';
-          ctx.fillText(`[${b.name.toUpperCase()}]`, cx, cy);
+          ctx.fillText(b.name.toUpperCase(), cx, labelY);
 
-          ctx.fillStyle = '#ff7066';
+          ctx.fillStyle = '#7c6f64';
           ctx.font = '9px monospace';
-          ctx.fillText(`ATTEN: -${b.attenuationDb}dB WALL`, cx, cy + 13);
+          ctx.fillText(`WALL LOSS: ${b.attenuationDb} dB`, cx, subLabelY);
         } else {
-          ctx.strokeStyle = '#ff3b30';
+          ctx.strokeStyle = '#cc241d';
           ctx.setLineDash([4, 4]);
           ctx.lineWidth = 1.5;
           ctx.stroke();
@@ -588,15 +496,15 @@ export const SimulationCanvas: React.FC<SimulationCanvasProps> = ({
         // Square vector vertex handles
         for (let i = 0; i < b.points.length; i++) {
           const pt = b.points[i];
-          ctx.fillStyle = '#ff3b30';
+          ctx.fillStyle = '#cc241d';
           ctx.fillRect(pt.x - 3, pt.y - 3, 6, 6);
-          ctx.strokeStyle = '#010602';
+          ctx.strokeStyle = '#fbf1c7';
           ctx.lineWidth = 1;
           ctx.strokeRect(pt.x - 3, pt.y - 3, 6, 6);
         }
       }
 
-      // 3. Render Active Building Drawing (In-Progress Lasso - Alert Red)
+      // 3. Render Active Building Drawing (In-Progress Lasso - Gruvbox Red)
       if (activeTool === 'DRAW_BUILDING' && currentBuildingVertices.length > 0) {
         ctx.beginPath();
         ctx.moveTo(currentBuildingVertices[0].x, currentBuildingVertices[0].y);
@@ -605,7 +513,7 @@ export const SimulationCanvas: React.FC<SimulationCanvasProps> = ({
         }
         ctx.lineTo(mousePos.x, mousePos.y);
 
-        ctx.strokeStyle = '#ff3b30';
+        ctx.strokeStyle = '#cc241d';
         ctx.setLineDash([5, 4]);
         ctx.lineWidth = 1.8;
         ctx.stroke();
@@ -613,34 +521,31 @@ export const SimulationCanvas: React.FC<SimulationCanvasProps> = ({
 
         for (let i = 0; i < currentBuildingVertices.length; i++) {
           const p = currentBuildingVertices[i];
-          ctx.fillStyle = i === 0 ? '#ff3b30' : '#ff7066';
+          ctx.fillStyle = i === 0 ? '#cc241d' : '#fb4934';
           ctx.fillRect(p.x - 4, p.y - 4, 8, 8);
-          ctx.strokeStyle = '#010602';
+          ctx.strokeStyle = '#282828';
           ctx.strokeRect(p.x - 4, p.y - 4, 8, 8);
 
           if (i === 0) {
-            ctx.fillStyle = '#ff3b30';
+            ctx.fillStyle = '#cc241d';
             ctx.font = 'bold 9px monospace';
             ctx.textAlign = 'center';
-            ctx.fillText('[ORIGIN: CLICK TO CLOSE]', p.x, p.y - 12);
+            ctx.fillText('ORIGIN: CLICK TO CLOSE', p.x, p.y - 12);
           }
         }
       }
 
-      // 4. Render GeoStop Coverage Halos (Cyan for T1, Orange for T2)
+      // 4. Render Anchor Coverage Halos (Gruvbox Blue)
       if (config.showCoverageHalos) {
+        const radiusM = config.anchorRadiusMeters ?? config.tier1RadiusMeters ?? 90;
+        const radiusPixels = radiusM * config.pixelsPerMeter;
         for (const stop of stops) {
-          const radiusPixels = (stop.tier === 1 ? config.tier1RadiusMeters : config.tier2RadiusMeters) * config.pixelsPerMeter;
-          const isTier1 = stop.tier === 1;
-
           ctx.beginPath();
           ctx.arc(stop.x, stop.y, radiusPixels, 0, Math.PI * 2);
-          ctx.fillStyle = isTier1 ? 'rgba(0, 242, 254, 0.02)' : 'rgba(255, 153, 0, 0.02)';
+          ctx.fillStyle = 'rgba(69, 133, 136, 0.04)';
           ctx.fill();
 
-          ctx.strokeStyle = isTier1
-            ? `rgba(0, 242, 254, ${0.24 + pulse * 0.06})`
-            : `rgba(255, 153, 0, ${0.22 + pulse * 0.06})`;
+          ctx.strokeStyle = `rgba(69, 133, 136, ${0.35 + pulse * 0.05})`;
           ctx.lineWidth = 1.2;
           ctx.setLineDash([5, 5]);
           ctx.stroke();
@@ -648,7 +553,7 @@ export const SimulationCanvas: React.FC<SimulationCanvasProps> = ({
         }
       }
 
-      // 5. Render Active RF Signals (Cyan for T1 LOS, Orange for T2 LOS, Red for NLOS)
+      // 5. Render Active RF Signals
       if (config.showRFRipples) {
         for (const sig of allSignals) {
           const tag = tags.find(t => t.id === sig.tagId);
@@ -659,22 +564,20 @@ export const SimulationCanvas: React.FC<SimulationCanvasProps> = ({
           ctx.moveTo(tag.x, tag.y);
           ctx.lineTo(stop.x, stop.y);
 
-          const isTier1 = stop.tier === 1;
-
           if (sig.isNlosZeroWeighted) {
-            ctx.strokeStyle = '#ff3b30'; // Alert Red for zero-weighted wall penetration
+            ctx.strokeStyle = '#cc241d'; // Gruvbox Red for NLOS zero-weighted
             ctx.lineWidth = 2.2;
             ctx.setLineDash([8, 3, 2, 3]);
           } else if (sig.isOutlier) {
-            ctx.strokeStyle = '#ff9900'; // Orange for statistical outlier
+            ctx.strokeStyle = '#d65d0e'; // Gruvbox Orange for statistical outlier
             ctx.lineWidth = 1.8;
             ctx.setLineDash([4, 4]);
           } else if (sig.obstructed) {
-            ctx.strokeStyle = '#ff3b30'; // Red warning for wall attenuation
+            ctx.strokeStyle = '#cc241d'; // Red warning for wall attenuation
             ctx.lineWidth = 1.5;
             ctx.setLineDash([3, 5]);
           } else {
-            ctx.strokeStyle = isTier1 ? 'rgba(0, 242, 254, 0.65)' : 'rgba(255, 153, 0, 0.65)';
+            ctx.strokeStyle = 'rgba(69, 133, 136, 0.65)';
             ctx.lineWidth = 1.8;
             ctx.setLineDash([6, 6]);
             ctx.lineDashOffset = -flowOffset;
@@ -682,47 +585,10 @@ export const SimulationCanvas: React.FC<SimulationCanvasProps> = ({
           ctx.stroke();
           ctx.setLineDash([]);
           ctx.lineDashOffset = 0;
-
-          // Mid-beam RSSI badge
-          const midX = (tag.x + stop.x) / 2;
-          const midY = (tag.y + stop.y) / 2;
-
-          let badgeText = `SIG: ${sig.rssiDbm}dBm [${isTier1 ? 'T1' : 'T2'}-LOS]`;
-          let badgeWidth = 100;
-          let badgeColor = isTier1 ? '#00f2fe' : '#ff9900';
-          let borderColor = isTier1 ? '#007780' : '#804c00';
-
-          if (sig.isNlosZeroWeighted) {
-            badgeText = `SIG: ${sig.rssiDbm}dBm [NLOS-REJ WT:0]`;
-            badgeWidth = 168;
-            badgeColor = '#ff3b30';
-            borderColor = '#ff3b30';
-          } else if (sig.isOutlier) {
-            badgeText = `SIG: ${sig.rssiDbm}dBm [OUTLIER]`;
-            badgeWidth = 132;
-            badgeColor = '#ff9900';
-            borderColor = '#ff9900';
-          } else if (sig.obstructed) {
-            badgeText = `SIG: ${sig.rssiDbm}dBm [WALL ATTEN]`;
-            badgeWidth = 148;
-            badgeColor = '#ff3b30';
-            borderColor = '#ff3b30';
-          }
-
-          ctx.fillStyle = '#010803';
-          ctx.fillRect(midX - badgeWidth / 2, midY - 9, badgeWidth, 16);
-          ctx.strokeStyle = borderColor;
-          ctx.lineWidth = 1;
-          ctx.strokeRect(midX - badgeWidth / 2, midY - 9, badgeWidth, 16);
-
-          ctx.fillStyle = badgeColor;
-          ctx.font = '9px monospace';
-          ctx.textAlign = 'center';
-          ctx.fillText(badgeText, midX, midY + 3);
         }
       }
 
-      // 6. Render LoRa / Wi-Fi Backhaul Beams (GeoStops -> GeoCentre in Electric Cyan)
+      // 6. Render LoRa / Backhaul Beams (GeoStops -> GeoCentre)
       if (config.showBackhaulBeams && geoCentre) {
         const activeStopIds = new Set(allSignals.map(s => s.stopId));
 
@@ -734,7 +600,7 @@ export const SimulationCanvas: React.FC<SimulationCanvasProps> = ({
           ctx.moveTo(stop.x, stop.y);
           ctx.lineTo(geoCentre.x, geoCentre.y);
 
-          ctx.strokeStyle = 'rgba(0, 242, 254, 0.45)';
+          ctx.strokeStyle = 'rgba(69, 133, 136, 0.45)';
           ctx.lineWidth = 1.5;
           ctx.setLineDash([4, 6]);
           ctx.lineDashOffset = -flowOffset * 1.5;
@@ -747,115 +613,122 @@ export const SimulationCanvas: React.FC<SimulationCanvasProps> = ({
           const px = stop.x + (geoCentre.x - stop.x) * t;
           const py = stop.y + (geoCentre.y - stop.y) * t;
 
-          ctx.fillStyle = '#00f2fe';
+          ctx.fillStyle = '#076678';
           ctx.fillRect(px - 2, py - 2, 4, 4);
         }
       }
 
-      // 7. Render GeoCentre (Command Bunker / Master Station [⊕] in Electric Cyan)
+      // 7. Render GeoCentre Hub (Command Base Station / Rooftop Chassis)
       if (geoCentre) {
         const isSelected = selectedEntityId === geoCentre.id;
 
         // Outer pulse ring
         ctx.beginPath();
-        ctx.arc(geoCentre.x, geoCentre.y, 22 + pulse * 2.5, 0, Math.PI * 2);
-        ctx.strokeStyle = 'rgba(0, 242, 254, 0.35)';
+        ctx.arc(geoCentre.x, geoCentre.y, 22 + pulse * 2, 0, Math.PI * 2);
+        ctx.strokeStyle = 'rgba(7, 102, 120, 0.3)';
         ctx.lineWidth = 1.2;
         ctx.stroke();
 
-        // 1950s Fixed Radar Master Command Glyph: Inscribed crosshair station [⊕]
-        ctx.beginPath();
-        ctx.arc(geoCentre.x, geoCentre.y, 14, 0, Math.PI * 2);
-        ctx.fillStyle = '#001418';
-        ctx.fill();
-        ctx.strokeStyle = isSelected ? '#ffffff' : '#00f2fe';
+        // Hub station glyph (Sleek Central Gateway rooftop chassis)
+        const chassisW = 22;
+        const chassisH = 14;
+        ctx.fillStyle = isSelected ? '#dfebeb' : '#ebf2f2';
+        ctx.strokeStyle = isSelected ? '#d65d0e' : '#076678';
         ctx.lineWidth = isSelected ? 2.5 : 1.8;
-        ctx.stroke();
-
-        // Center crosshair lines
         ctx.beginPath();
-        ctx.moveTo(geoCentre.x - 18, geoCentre.y); ctx.lineTo(geoCentre.x + 18, geoCentre.y);
-        ctx.moveTo(geoCentre.x, geoCentre.y - 18); ctx.lineTo(geoCentre.x, geoCentre.y + 18);
-        ctx.strokeStyle = '#00f2fe';
-        ctx.lineWidth = 1.5;
+        if (typeof (ctx as any).roundRect === 'function') {
+          (ctx as any).roundRect(geoCentre.x - chassisW / 2, geoCentre.y - chassisH / 2, chassisW, chassisH, 3);
+        } else {
+          ctx.rect(geoCentre.x - chassisW / 2, geoCentre.y - chassisH / 2, chassisW, chassisH);
+        }
+        ctx.fill();
         ctx.stroke();
 
-        // Corner calibration ticks [ ⌖ ]
-        const cTick = 8;
-        ctx.strokeStyle = '#007780';
-        ctx.strokeRect(geoCentre.x - cTick, geoCentre.y - cTick, cTick * 2, cTick * 2);
+        // Gateway vertical antenna mast
+        ctx.beginPath();
+        ctx.moveTo(geoCentre.x, geoCentre.y - chassisH / 2);
+        ctx.lineTo(geoCentre.x, geoCentre.y - chassisH / 2 - 8);
+        ctx.strokeStyle = isSelected ? '#d65d0e' : '#076678';
+        ctx.lineWidth = 1.8;
+        ctx.stroke();
 
-        // Center pip
-        ctx.fillStyle = '#00f2fe';
-        ctx.fillRect(geoCentre.x - 2, geoCentre.y - 2, 4, 4);
+        // Gateway antenna radome top pip
+        ctx.beginPath();
+        ctx.arc(geoCentre.x, geoCentre.y - chassisH / 2 - 8, 2.5, 0, Math.PI * 2);
+        ctx.fillStyle = isSelected ? '#d65d0e' : '#076678';
+        ctx.fill();
 
-        // Nomenclature Stamped Box
-        ctx.fillStyle = '#00f2fe';
-        ctx.font = 'bold 9.5px monospace';
+        // Hub central status indicator
+        ctx.beginPath();
+        ctx.arc(geoCentre.x, geoCentre.y, 2.5, 0, Math.PI * 2);
+        ctx.fillStyle = isSelected ? '#d65d0e' : '#076678';
+        ctx.fill();
+
+        // Label (Positioned cleanly below the server chassis)
+        ctx.fillStyle = '#076678';
+        ctx.font = 'bold 9px monospace';
         ctx.textAlign = 'center';
-        ctx.fillText(`[HQ-BASE // AN/FPS-52]`, geoCentre.x, geoCentre.y - 22);
+        ctx.fillText(`CENTRAL GATEWAY`, geoCentre.x, geoCentre.y + 22);
       }
 
-      // 8. Render GeoStops (Tier-1 Cyan Masts ▲ and Tier-2 Orange Relays ◈)
+      // 8. Render Anchors (Unified Radio Mast Tower Glyph)
       for (const stop of stops) {
         const isSelected = selectedEntityId === stop.id;
-        const isTier1 = stop.tier === 1;
+        const x = stop.x;
+        const y = stop.y;
 
-        if (isTier1) {
-          // Tier-1: High-Power Solar Radar Mast Delta [▲] - Electric Cyan
-          ctx.beginPath();
-          ctx.moveTo(stop.x, stop.y - 9);
-          ctx.lineTo(stop.x + 8, stop.y + 7);
-          ctx.lineTo(stop.x - 8, stop.y + 7);
-          ctx.closePath();
-          ctx.fillStyle = isSelected ? '#003840' : '#001920';
-          ctx.fill();
-          ctx.strokeStyle = isSelected ? '#ffffff' : '#00f2fe';
-          ctx.lineWidth = isSelected ? 2.5 : 1.8;
-          ctx.stroke();
+        const mastColor = isSelected ? '#d65d0e' : '#076678';
 
-          // Radiating broadcast arcs: (( ▲ )) in Cyan
-          ctx.strokeStyle = '#00f2fe';
-          ctx.lineWidth = 1.2;
-          ctx.beginPath();
-          ctx.arc(stop.x, stop.y, 14, -Math.PI * 0.75, -Math.PI * 0.25);
-          ctx.stroke();
-          ctx.beginPath();
-          ctx.arc(stop.x, stop.y, 18, -Math.PI * 0.7, -Math.PI * 0.3);
-          ctx.stroke();
+        ctx.strokeStyle = mastColor;
+        ctx.lineWidth = isSelected ? 2.2 : 1.6;
+        ctx.lineCap = 'round';
+        ctx.lineJoin = 'round';
 
-          // Nomenclature tag in Cyan
-          ctx.fillStyle = '#00f2fe';
-          ctx.font = 'bold 9px monospace';
-          ctx.textAlign = 'center';
-          ctx.fillText(`[T-1: ${stop.name.toUpperCase()}]`, stop.x, stop.y - 17);
-        } else {
-          // Tier-2: Auxiliary Diamond Relay [◈] - Amber/Orange
-          ctx.beginPath();
-          ctx.moveTo(stop.x, stop.y - 8);
-          ctx.lineTo(stop.x + 8, stop.y);
-          ctx.lineTo(stop.x, stop.y + 8);
-          ctx.lineTo(stop.x - 8, stop.y);
-          ctx.closePath();
-          ctx.fillStyle = isSelected ? '#402600' : '#1a1000';
-          ctx.fill();
-          ctx.strokeStyle = isSelected ? '#ffffff' : '#ff9900';
-          ctx.lineWidth = isSelected ? 2.5 : 1.8;
-          ctx.stroke();
+        // 1. Tapered Lattice Tower Legs (A-frame structure)
+        ctx.beginPath();
+        ctx.moveTo(x - 7, y + 8);
+        ctx.lineTo(x, y - 5);
+        ctx.lineTo(x + 7, y + 8);
+        ctx.stroke();
 
-          // Inner pip in Orange
-          ctx.fillStyle = '#ff9900';
-          ctx.fillRect(stop.x - 2, stop.y - 2, 4, 4);
+        // 2. Base plate & horizontal cross-strut
+        ctx.beginPath();
+        ctx.moveTo(x - 8, y + 8);
+        ctx.lineTo(x + 8, y + 8);
+        ctx.moveTo(x - 4.5, y + 1);
+        ctx.lineTo(x + 4.5, y + 1);
+        ctx.stroke();
 
-          // Nomenclature tag in Orange
-          ctx.fillStyle = '#ff9900';
-          ctx.font = '9px monospace';
-          ctx.textAlign = 'center';
-          ctx.fillText(`[T-2: ${stop.name.toUpperCase()}]`, stop.x, stop.y - 15);
-        }
+        // 3. Vertical antenna mast extending from tower apex
+        ctx.beginPath();
+        ctx.moveTo(x, y - 5);
+        ctx.lineTo(x, y - 12);
+        ctx.stroke();
+
+        // 4. Top RF radiator emitter pip
+        ctx.beginPath();
+        ctx.arc(x, y - 12, 2.2, 0, Math.PI * 2);
+        ctx.fillStyle = mastColor;
+        ctx.fill();
+
+        // Radiating subtle RF wave arcs above the mast
+        ctx.strokeStyle = isSelected ? 'rgba(214, 93, 14, 0.6)' : 'rgba(7, 102, 120, 0.45)';
+        ctx.lineWidth = 1.2;
+        ctx.beginPath();
+        ctx.arc(x, y - 12, 6, -Math.PI * 0.75, -Math.PI * 0.25);
+        ctx.stroke();
+        ctx.beginPath();
+        ctx.arc(x, y - 12, 10, -Math.PI * 0.7, -Math.PI * 0.3);
+        ctx.stroke();
+
+        // Station name label below tower
+        ctx.fillStyle = mastColor;
+        ctx.font = 'bold 9px monospace';
+        ctx.textAlign = 'center';
+        ctx.fillText(stop.name.toUpperCase(), x, y + 20);
       }
 
-      // 8.5 Render Traced Doggo Waypoint Route & Turn Badges (Phosphor Green)
+      // 8.5 Render Traced Doggo Waypoint Route (Gruvbox Olive)
       if (dogPath.length > 0) {
         if (dogPath.length >= 2) {
           ctx.beginPath();
@@ -866,7 +739,7 @@ export const SimulationCanvas: React.FC<SimulationCanvasProps> = ({
           if (dogPath.length >= 3) {
             ctx.closePath();
           }
-          ctx.strokeStyle = 'rgba(0, 255, 65, 0.55)';
+          ctx.strokeStyle = 'rgba(121, 116, 14, 0.65)';
           ctx.lineWidth = 1.8;
           ctx.setLineDash([8, 6]);
           ctx.lineDashOffset = -flowOffset * 0.7;
@@ -881,40 +754,40 @@ export const SimulationCanvas: React.FC<SimulationCanvasProps> = ({
           ctx.beginPath();
           ctx.moveTo(lastWp.x, lastWp.y);
           ctx.lineTo(mousePos.x, mousePos.y);
-          ctx.strokeStyle = '#00ff41';
+          ctx.strokeStyle = '#79740e';
           ctx.lineWidth = 1.5;
           ctx.setLineDash([4, 4]);
           ctx.stroke();
           ctx.setLineDash([]);
         }
 
-        // Vector Waypoint Turn Badges: [01], [02], [03]...
+        // Waypoint Turn Badges
         for (let i = 0; i < dogPath.length; i++) {
           const wp = dogPath[i];
           const isCurrentTarget = tags[0]?.currentWaypointIndex === i;
 
           if (isCurrentTarget) {
             ctx.beginPath();
-            ctx.arc(wp.x, wp.y, 16 + pulse * 2.5, 0, Math.PI * 2);
-            ctx.strokeStyle = '#00ff41';
+            ctx.arc(wp.x, wp.y, 16 + pulse * 2, 0, Math.PI * 2);
+            ctx.strokeStyle = '#79740e';
             ctx.lineWidth = 1.2;
             ctx.stroke();
           }
 
           // Node Box
-          ctx.fillStyle = isCurrentTarget ? '#003310' : '#010c04';
+          ctx.fillStyle = isCurrentTarget ? '#eaedd0' : '#fbf1c7';
           ctx.fillRect(wp.x - 12, wp.y - 8, 24, 16);
-          ctx.strokeStyle = isCurrentTarget ? '#00ff41' : '#00aa33';
+          ctx.strokeStyle = isCurrentTarget ? '#79740e' : '#b8bb26';
           ctx.lineWidth = isCurrentTarget ? 2 : 1;
           ctx.strokeRect(wp.x - 12, wp.y - 8, 24, 16);
 
-          ctx.fillStyle = '#00ff41';
+          ctx.fillStyle = '#79740e';
           ctx.font = 'bold 9px monospace';
           ctx.textAlign = 'center';
           const wpIndexStr = i < 9 ? `0${i + 1}` : `${i + 1}`;
           ctx.fillText(`[${wpIndexStr}]`, wp.x, wp.y + 3);
 
-          ctx.fillStyle = isCurrentTarget ? '#00ff41' : '#008826';
+          ctx.fillStyle = isCurrentTarget ? '#79740e' : '#7c6f64';
           ctx.font = '8px monospace';
           ctx.fillText(isCurrentTarget ? `NEXT WP` : `WP #${wpIndexStr}`, wp.x, wp.y - 12);
         }
@@ -922,15 +795,15 @@ export const SimulationCanvas: React.FC<SimulationCanvasProps> = ({
 
       // Cursor hint for Trace Path tool
       if (activeTool === 'TRACE_PATH') {
-        ctx.fillStyle = '#010903';
+        ctx.fillStyle = '#fbf1c7';
         ctx.fillRect(mousePos.x + 12, mousePos.y + 12, 160, 20);
-        ctx.strokeStyle = '#00ff41';
+        ctx.strokeStyle = '#79740e';
         ctx.lineWidth = 1;
         ctx.strokeRect(mousePos.x + 12, mousePos.y + 12, 160, 20);
-        ctx.fillStyle = '#00ff41';
-        ctx.font = '9px monospace';
+        ctx.fillStyle = '#79740e';
+        ctx.font = 'bold 9px monospace';
         ctx.textAlign = 'left';
-        ctx.fillText(`[CLICK TO ADD WP #${dogPath.length + 1}]`, mousePos.x + 16, mousePos.y + 26);
+        ctx.fillText(`+ ADD WAYPOINT #${dogPath.length + 1}`, mousePos.x + 16, mousePos.y + 26);
       }
 
       // 9. Render Ground-Truth Target Track & Calculated Localization
@@ -938,12 +811,12 @@ export const SimulationCanvas: React.FC<SimulationCanvasProps> = ({
         const isSelected = selectedEntityId === tag.id;
         const res = results.find(r => r.tagId === tag.id);
 
-        // A. True Doggo Position: Vector Target Track Blip [⨀] in Electric Cyan
+        // A. True Doggo Position
         if (config.showTrueDoggos) {
           const heading = tag.headingDeg ?? 90;
           const headingRad = ((heading - 90) * Math.PI) / 180;
 
-          // Forward Sensor Cone (60° FOV) in Electric Cyan
+          // Forward Sensor Cone (60° FOV)
           if (config.showHeadingVisionCone !== false) {
             const coneFovRad = (60 * Math.PI) / 180;
             const coneDist = 48;
@@ -956,16 +829,16 @@ export const SimulationCanvas: React.FC<SimulationCanvasProps> = ({
             ctx.closePath();
 
             const coneGrad = ctx.createRadialGradient(tag.x, tag.y, 4, tag.x, tag.y, coneDist);
-            coneGrad.addColorStop(0, 'rgba(0, 242, 254, 0.28)');
-            coneGrad.addColorStop(0.7, 'rgba(0, 242, 254, 0.08)');
-            coneGrad.addColorStop(1, 'rgba(0, 242, 254, 0.0)');
+            coneGrad.addColorStop(0, 'rgba(69, 133, 136, 0.22)');
+            coneGrad.addColorStop(0.7, 'rgba(69, 133, 136, 0.06)');
+            coneGrad.addColorStop(1, 'rgba(69, 133, 136, 0.0)');
             ctx.fillStyle = coneGrad;
             ctx.fill();
 
             // Arc perimeter dashed rim
             ctx.beginPath();
             ctx.arc(tag.x, tag.y, coneDist, headingRad - halfFov, headingRad + halfFov);
-            ctx.strokeStyle = 'rgba(0, 242, 254, 0.55)';
+            ctx.strokeStyle = 'rgba(69, 133, 136, 0.45)';
             ctx.lineWidth = 1.2;
             ctx.setLineDash([3, 3]);
             ctx.stroke();
@@ -973,30 +846,41 @@ export const SimulationCanvas: React.FC<SimulationCanvasProps> = ({
             ctx.restore();
           }
 
-          // Active Track Blip: Vector glyph [⨀] in Electric Cyan
+          // Active Dog Track: Friendly Emoji Doggo Symbol 🐶
+          ctx.save();
+          // Circular paper badge
           ctx.beginPath();
-          ctx.arc(tag.x, tag.y, 9, 0, Math.PI * 2);
-          ctx.fillStyle = '#001820';
+          ctx.arc(tag.x, tag.y, 13, 0, Math.PI * 2);
+          ctx.fillStyle = '#fbf1c7';
           ctx.fill();
-          ctx.strokeStyle = isSelected ? '#ffffff' : '#00f2fe';
-          ctx.lineWidth = isSelected ? 2.5 : 1.8;
+          ctx.strokeStyle = isSelected ? '#d65d0e' : '#076678';
+          ctx.lineWidth = isSelected ? 2.2 : 1.6;
           ctx.stroke();
 
-          // Center solid pip in Cyan
+          // Render Doggo Emoji 🐶
+          ctx.font = '16px "Apple Color Emoji", "Segoe UI Emoji", "Noto Color Emoji", sans-serif';
+          ctx.textAlign = 'center';
+          ctx.textBaseline = 'middle';
+          ctx.fillText('🐶', tag.x, tag.y + 0.5);
+          ctx.restore();
+
+          // Directional Heading Indicator Pip on the perimeter
+          const needleDist = 13;
+          const tipX = tag.x + Math.cos(headingRad) * needleDist;
+          const tipY = tag.y + Math.sin(headingRad) * needleDist;
           ctx.beginPath();
-          ctx.arc(tag.x, tag.y, 3.5, 0, Math.PI * 2);
-          ctx.fillStyle = '#00f2fe';
+          ctx.arc(tipX, tipY, 2.5, 0, Math.PI * 2);
+          ctx.fillStyle = isSelected ? '#d65d0e' : '#076678';
           ctx.fill();
 
-          // Forward Vector Needle (Dorsal Spine Collar Axis in Cyan)
-          const needleLen = 20;
-          const tipX = tag.x + Math.cos(headingRad) * needleLen;
-          const tipY = tag.y + Math.sin(headingRad) * needleLen;
-
+          // Forward Vector Needle pointing forward
+          const extNeedleLen = 22;
+          const extTipX = tag.x + Math.cos(headingRad) * extNeedleLen;
+          const extTipY = tag.y + Math.sin(headingRad) * extNeedleLen;
           ctx.beginPath();
-          ctx.moveTo(tag.x, tag.y);
-          ctx.lineTo(tipX, tipY);
-          ctx.strokeStyle = '#00f2fe';
+          ctx.moveTo(tipX, tipY);
+          ctx.lineTo(extTipX, extTipY);
+          ctx.strokeStyle = isSelected ? '#d65d0e' : '#076678';
           ctx.lineWidth = 2;
           ctx.stroke();
 
@@ -1005,25 +889,30 @@ export const SimulationCanvas: React.FC<SimulationCanvasProps> = ({
           const leftHeadAngle = headingRad + Math.PI * 0.82;
           const rightHeadAngle = headingRad - Math.PI * 0.82;
           ctx.beginPath();
-          ctx.moveTo(tipX, tipY);
-          ctx.lineTo(tipX + Math.cos(leftHeadAngle) * arrowHead, tipY + Math.sin(leftHeadAngle) * arrowHead);
-          ctx.lineTo(tipX + Math.cos(rightHeadAngle) * arrowHead, tipY + Math.sin(rightHeadAngle) * arrowHead);
+          ctx.moveTo(extTipX, extTipY);
+          ctx.lineTo(extTipX + Math.cos(leftHeadAngle) * arrowHead, extTipY + Math.sin(leftHeadAngle) * arrowHead);
+          ctx.lineTo(extTipX + Math.cos(rightHeadAngle) * arrowHead, extTipY + Math.sin(rightHeadAngle) * arrowHead);
           ctx.closePath();
-          ctx.fillStyle = '#00f2fe';
+          ctx.fillStyle = isSelected ? '#d65d0e' : '#076678';
           ctx.fill();
 
-          // Dorsal e-Compass Telemetry Block in Cyan
+          // Dorsal e-Compass Telemetry Block (Clean name without TRK-01)
           const cardinal = tag.compassData?.cardinal ?? getCardinalDirection(heading);
-          ctx.fillStyle = '#001218';
-          ctx.fillRect(tag.x - 48, tag.y + 16, 96, 16);
-          ctx.strokeStyle = '#007780';
-          ctx.lineWidth = 1;
-          ctx.strokeRect(tag.x - 48, tag.y + 16, 96, 16);
-
+          const cleanName = tag.name.replace(/^TRK-\d+\s*\((.+)\)$/, '$1').replace(/^TRK-\d+\s*/, '');
+          const k9Label = `${cleanName} • ${Math.round(heading)}° ${cardinal}${tag.imuResting ? ' (Rest)' : ''}`;
           ctx.font = 'bold 8.5px monospace';
-          ctx.fillStyle = '#00f2fe';
+          const textW = ctx.measureText(k9Label).width;
+          const badgeW = Math.max(76, textW + 14);
+          ctx.fillStyle = '#fbf1c7';
+          ctx.fillRect(tag.x - badgeW / 2, tag.y + 17, badgeW, 16);
+          ctx.strokeStyle = '#d5c4a1';
+          ctx.lineWidth = 1;
+          ctx.strokeRect(tag.x - badgeW / 2, tag.y + 17, badgeW, 16);
+
+          ctx.fillStyle = '#282828';
           ctx.textAlign = 'center';
-          ctx.fillText(`TRK: ${Math.round(heading)}° ${cardinal} ${tag.imuResting ? '[STN]' : '[RUN]'}`, tag.x, tag.y + 27);
+          ctx.textBaseline = 'alphabetic';
+          ctx.fillText(k9Label, tag.x, tag.y + 28);
         }
 
         // B. Server Calculated Localization Geometric Manifolds
@@ -1033,7 +922,7 @@ export const SimulationCanvas: React.FC<SimulationCanvasProps> = ({
 
           let displayPos = unifiedDisplayCoordRef.current.get(tag.id);
           if (!displayPos) {
-            displayPos = { x: res.estimatedX, y: res.estimatedY };
+            displayPos = { x: tag.x, y: tag.y };
             unifiedDisplayCoordRef.current.set(tag.id, displayPos);
             anchorTransitionMapRef.current.set(tag.id, {
               prevAnchorCount: currentAnchorCount,
@@ -1049,44 +938,29 @@ export const SimulationCanvas: React.FC<SimulationCanvasProps> = ({
             transitionInfo.transitionStartTime = Date.now();
           }
 
-          const nowMs = Date.now();
-          const elapsedSec = Math.max(0, Math.min(0.20, (nowMs - (res.timestamp || nowMs)) / 1000));
-          const vx = res.velocity?.x || 0;
-          const vy = res.velocity?.y || 0;
-          const deadReckonedX = res.estimatedX + vx * elapsedSec;
-          const deadReckonedY = res.estimatedY + vy * elapsedSec;
-
-          let targetX = deadReckonedX;
-          let targetY = deadReckonedY;
+          let targetX = res.estimatedX;
+          let targetY = res.estimatedY;
 
           if (transitionInfo && transitionInfo.transitionStartTime > 0) {
-            const elapsed = nowMs - transitionInfo.transitionStartTime;
-            if (elapsed < 160) {
-              const t = elapsed / 160;
+            const elapsed = Date.now() - transitionInfo.transitionStartTime;
+            if (elapsed < 140) {
+              const t = elapsed / 140;
               const smoothT = t * t * (3 - 2 * t);
-              targetX = transitionInfo.prevCoord.x * (1 - smoothT) + deadReckonedX * smoothT;
-              targetY = transitionInfo.prevCoord.y * (1 - smoothT) + deadReckonedY * smoothT;
+              targetX = transitionInfo.prevCoord.x * (1 - smoothT) + res.estimatedX * smoothT;
+              targetY = transitionInfo.prevCoord.y * (1 - smoothT) + res.estimatedY * smoothT;
             } else {
               transitionInfo.transitionStartTime = 0;
             }
           }
 
-          const dx = targetX - displayPos.x;
-          const dy = targetY - displayPos.y;
-          const dist = Math.sqrt(dx * dx + dy * dy);
+          // Continuous Exponential Moving Average (EMA) low-pass filter
+          // Eradicates discrete 12.5Hz packet jitter while maintaining instantaneous agility (<30ms lag)
+          const tau = 0.065; // 65ms relaxation time constant
+          const alpha = 1.0 - Math.exp(-frameDt / tau);
+          displayPos.x += (targetX - displayPos.x) * alpha;
+          displayPos.y += (targetY - displayPos.y) * alpha;
 
-          if (dist > 0.05) {
-            if (dist < 1.5) {
-              displayPos.x = targetX;
-              displayPos.y = targetY;
-            } else {
-              const step = dist * 0.85;
-              displayPos.x += (dx / dist) * step;
-              displayPos.y += (dy / dist) * step;
-            }
-          }
-
-          // B0. HISTORICAL TRAJECTORY PHOSPHOR PERSISTENCE TAIL (Green)
+          // B0. HISTORICAL PATROL BREADCRUMBS (Gruvbox Olive)
           if (config.showHistoricalBreadcrumbs && res.historyTrail && res.historyTrail.length >= 2) {
             const trail = res.historyTrail;
             ctx.save();
@@ -1096,59 +970,38 @@ export const SimulationCanvas: React.FC<SimulationCanvasProps> = ({
             for (let i = 1; i < trail.length; i++) {
               ctx.lineTo(trail[i].x, trail[i].y);
             }
-            ctx.strokeStyle = 'rgba(0, 255, 65, 0.35)';
+            ctx.strokeStyle = 'rgba(121, 116, 14, 0.4)';
             ctx.lineWidth = 1.5;
             ctx.setLineDash([3, 4]);
             ctx.stroke();
             ctx.setLineDash([]);
 
-            // Progressive decaying phosphor breadcrumbs
+            // Decaying breadcrumbs
             for (let i = 0; i < trail.length; i++) {
               const fix = trail[i];
               const progress = (i + 1) / trail.length;
               const dotRadius = 1.8 + progress * 2.2;
-              const alpha = 0.15 + progress * 0.8;
+              const alpha = 0.2 + progress * 0.7;
 
-              // Outer glow
-              ctx.beginPath();
-              ctx.arc(fix.x, fix.y, dotRadius + 1.5, 0, Math.PI * 2);
-              ctx.fillStyle = `rgba(0, 255, 65, ${alpha * 0.3})`;
-              ctx.fill();
-
-              // Center dot
               ctx.beginPath();
               ctx.arc(fix.x, fix.y, dotRadius, 0, Math.PI * 2);
-              ctx.fillStyle = `rgba(0, 255, 65, ${alpha})`;
+              ctx.fillStyle = `rgba(121, 116, 14, ${alpha})`;
               ctx.fill();
             }
             ctx.restore();
           }
 
-          // B1. 1-ANCHOR RADIAL UNCERTAINTY RING (Amber/Orange)
+          // B1. 1-ANCHOR RADIAL UNCERTAINTY RING (Gruvbox Amber)
           if (res.lockType === 'RADIAL_RING' && res.radialRing) {
-            const { center, radiusPixels, radiusMeters } = res.radialRing;
+            const { center, radiusPixels } = res.radialRing;
 
             ctx.beginPath();
             ctx.arc(center.x, center.y, radiusPixels, 0, Math.PI * 2);
-            ctx.strokeStyle = `rgba(255, 153, 0, ${0.45 + pulse * 0.15})`;
+            ctx.strokeStyle = `rgba(215, 153, 33, ${0.45 + pulse * 0.15})`;
             ctx.lineWidth = 1.8;
             ctx.setLineDash([5, 5]);
             ctx.stroke();
             ctx.setLineDash([]);
-
-            const angle = -Math.PI / 4;
-            const lx = center.x + Math.cos(angle) * radiusPixels;
-            const ly = center.y + Math.sin(angle) * radiusPixels;
-
-            ctx.fillStyle = '#140b00';
-            ctx.fillRect(lx - 60, ly - 9, 120, 18);
-            ctx.strokeStyle = '#ff9900';
-            ctx.strokeRect(lx - 60, ly - 9, 120, 18);
-
-            ctx.fillStyle = '#ff9900';
-            ctx.font = '600 9px monospace';
-            ctx.textAlign = 'center';
-            ctx.fillText(`[1-BCN RING: ~${radiusMeters}M]`, lx, ly + 3);
           }
 
           // B2. 2-ANCHOR DUAL CANDIDATE INTERSECTIONS & MIRROR OUTCASTING
@@ -1175,41 +1028,19 @@ export const SimulationCanvas: React.FC<SimulationCanvasProps> = ({
             }
 
             const [p1, p2] = smoothCandidates;
-            const dualInfo = res.dualInfo;
             const isPinpoint = res.lockType === 'DUAL_PINPOINT_LOCK';
 
-            // Dashed baseline chord (Orange for Ambiguous, Cyan for Pinpoint)
-            ctx.beginPath();
-            ctx.moveTo(p1.x, p1.y);
-            ctx.lineTo(p2.x, p2.y);
-            ctx.strokeStyle = isPinpoint ? 'rgba(0, 242, 254, 0.45)' : 'rgba(255, 153, 0, 0.45)';
-            ctx.lineWidth = 1.5;
-            ctx.setLineDash([4, 4]);
-            ctx.stroke();
-            ctx.setLineDash([]);
-
-            const midChordX = (p1.x + p2.x) / 2;
-            const midChordY = (p1.y + p2.y) / 2;
-            const separationM = dualInfo ? dualInfo.separationChordMeters : Math.round((distance(p1, p2) / config.pixelsPerMeter) * 10) / 10;
-            const ghostErrM = dualInfo?.candidate2ErrorMeters ?? Math.round((distance({ x: tag.x, y: tag.y }, p2) / config.pixelsPerMeter) * 10) / 10;
-
-            const chordText = dualInfo?.isTransitionBuffering
-              ? `[TRANSITION BUFFER: 120ms MATCH | CHORD: ${separationM}M]`
-              : isPinpoint
-                ? `[FUSED 2-BCN LOCK | CHORD: ${separationM}M | GHOST: Δ${ghostErrM}M]`
-                : res.lockType === 'DUAL_KINEMATIC_LOCK'
-                  ? `[CHORD: ${separationM}M | GHOST: Δ${ghostErrM}M]`
-                  : `[BASELINE CROSSING: ${separationM}M]`;
-
-            const badgeWidth = isPinpoint ? 280 : 200;
-            ctx.fillStyle = '#010803';
-            ctx.fillRect(midChordX - badgeWidth / 2, midChordY - 8, badgeWidth, 16);
-            ctx.strokeStyle = isPinpoint ? '#00f2fe' : '#ff9900';
-            ctx.strokeRect(midChordX - badgeWidth / 2, midChordY - 8, badgeWidth, 16);
-            ctx.fillStyle = isPinpoint ? '#00f2fe' : '#ff9900';
-            ctx.font = '8.5px monospace';
-            ctx.textAlign = 'center';
-            ctx.fillText(chordText, midChordX, midChordY + 4);
+            // Dashed baseline chord (Only rendered when showGhostCandidates is TRUE)
+            if (config.showGhostCandidates) {
+              ctx.beginPath();
+              ctx.moveTo(p1.x, p1.y);
+              ctx.lineTo(p2.x, p2.y);
+              ctx.strokeStyle = isPinpoint ? 'rgba(7, 102, 120, 0.45)' : 'rgba(214, 93, 14, 0.45)';
+              ctx.lineWidth = 1.5;
+              ctx.setLineDash([4, 4]);
+              ctx.stroke();
+              ctx.setLineDash([]);
+            }
 
             const valIdx = res.dualInfo?.validatedIndex ?? 0;
             const outIdx = res.dualInfo?.outcastIndex ?? 1;
@@ -1228,14 +1059,13 @@ export const SimulationCanvas: React.FC<SimulationCanvasProps> = ({
                 res.lockType === 'DUAL_AMBIGUOUS_CHORD'
               );
 
-              if (isCandidateOutcast) {
-                // Outcast Mirror Ghost: Struck-through radar echo [X-GHOST-VOID] in ALERT RED
-                const thisGhostErrM = Math.round((distance({ x: tag.x, y: tag.y }, cand) / config.pixelsPerMeter) * 10) / 10;
+              if (isCandidateOutcast && config.showGhostCandidates) {
+                // Outcast Mirror Ghost: Struck-through echo [GHOST-VOID] in Alert Red
                 ctx.beginPath();
                 ctx.arc(cand.x, cand.y, 8, 0, Math.PI * 2);
-                ctx.fillStyle = 'rgba(50, 10, 8, 0.5)';
+                ctx.fillStyle = 'rgba(250, 230, 228, 0.6)';
                 ctx.fill();
-                ctx.strokeStyle = '#ff3b30';
+                ctx.strokeStyle = '#cc241d';
                 ctx.lineWidth = 1.5;
                 ctx.setLineDash([3, 3]);
                 ctx.stroke();
@@ -1245,53 +1075,28 @@ export const SimulationCanvas: React.FC<SimulationCanvasProps> = ({
                 ctx.beginPath();
                 ctx.moveTo(cand.x - 5, cand.y - 5); ctx.lineTo(cand.x + 5, cand.y + 5);
                 ctx.moveTo(cand.x + 5, cand.y - 5); ctx.lineTo(cand.x - 5, cand.y + 5);
-                ctx.strokeStyle = '#ff3b30';
+                ctx.strokeStyle = '#cc241d';
                 ctx.lineWidth = 1.8;
                 ctx.stroke();
-
-                const outcastLabel = `[X-GHOST-VOID: Δ${thisGhostErrM}M]`;
-                const outcastBadgeW = 150;
-                ctx.fillStyle = '#140504';
-                ctx.fillRect(cand.x - outcastBadgeW / 2, cand.y - 22, outcastBadgeW, 15);
-                ctx.strokeStyle = '#ff3b30';
-                ctx.strokeRect(cand.x - outcastBadgeW / 2, cand.y - 22, outcastBadgeW, 15);
-
-                ctx.fillStyle = '#ff3b30';
-                ctx.font = '8.5px monospace';
-                ctx.textAlign = 'center';
-                ctx.fillText(outcastLabel, cand.x, cand.y - 11);
               } else if (isCandidateValidated) {
-                // Validated Pinpoint Track Gate in Cyan or Green
+                // Validated Candidate Reticle in Vibrant Gruvbox Orange
                 const vx = displayPos.x;
                 const vy = displayPos.y;
-                const gateColor = isPinpoint ? '#00f2fe' : '#00ff41';
+                const reticleColor = '#d65d0e'; // GRUVBOX ORANGE
 
                 // Dashed error line
                 ctx.beginPath();
                 ctx.moveTo(tag.x, tag.y);
                 ctx.lineTo(vx, vy);
-                ctx.strokeStyle = isPinpoint ? 'rgba(0, 242, 254, 0.7)' : 'rgba(0, 255, 65, 0.7)';
+                ctx.strokeStyle = 'rgba(214, 93, 14, 0.7)';
                 ctx.lineWidth = 1.5;
                 ctx.setLineDash([3, 3]);
                 ctx.stroke();
                 ctx.setLineDash([]);
 
-                // Mid-line error badge
-                const midX = (tag.x + vx) / 2;
-                const midY = (tag.y + vy) / 2;
-                ctx.fillStyle = '#010803';
-                ctx.fillRect(midX - 25, midY - 8, 50, 15);
-                ctx.strokeStyle = gateColor;
-                ctx.strokeRect(midX - 25, midY - 8, 50, 15);
-
-                ctx.fillStyle = gateColor;
-                ctx.font = 'bold 9px monospace';
-                ctx.textAlign = 'center';
-                ctx.fillText(`Δ ${res.errorMeters}M`, midX, midY + 3);
-
                 // Tracking Reticle Gate: 4 Corner Brackets
                 const gateR = 10;
-                ctx.strokeStyle = gateColor;
+                ctx.strokeStyle = reticleColor;
                 ctx.lineWidth = 2;
                 ctx.beginPath();
                 ctx.moveTo(vx - gateR, vy - gateR / 2); ctx.lineTo(vx - gateR, vy - gateR); ctx.lineTo(vx - gateR / 2, vy - gateR);
@@ -1301,7 +1106,7 @@ export const SimulationCanvas: React.FC<SimulationCanvasProps> = ({
                 ctx.stroke();
 
                 // Center pip
-                ctx.fillStyle = gateColor;
+                ctx.fillStyle = reticleColor;
                 ctx.fillRect(vx - 2, vy - 2, 4, 4);
 
                 // Forward Motion Vector Arrow
@@ -1316,7 +1121,7 @@ export const SimulationCanvas: React.FC<SimulationCanvasProps> = ({
                   ctx.beginPath();
                   ctx.moveTo(vx, vy);
                   ctx.lineTo(tipX, tipY);
-                  ctx.strokeStyle = gateColor;
+                  ctx.strokeStyle = reticleColor;
                   ctx.lineWidth = 2;
                   ctx.stroke();
 
@@ -1326,71 +1131,39 @@ export const SimulationCanvas: React.FC<SimulationCanvasProps> = ({
                   ctx.lineTo(tipX - headLen * (dirX + dirY * 0.5), tipY - headLen * (dirY - dirX * 0.5));
                   ctx.lineTo(tipX - headLen * (dirX - dirY * 0.5), tipY - headLen * (dirY + dirX * 0.5));
                   ctx.closePath();
-                  ctx.fillStyle = gateColor;
+                  ctx.fillStyle = reticleColor;
                   ctx.fill();
                 }
-
-                // Validated Label
-                const valLabel = isPinpoint
-                  ? `[FUSED PINPOINT // Δ ${res.errorMeters}M]`
-                  : `[2-BCN LOCK // Δ ${res.errorMeters}M]`;
-                const valBadgeW = isPinpoint ? 190 : 160;
-                ctx.fillStyle = '#010803';
-                ctx.fillRect(vx - valBadgeW / 2, vy - 24, valBadgeW, 15);
-                ctx.strokeStyle = gateColor;
-                ctx.strokeRect(vx - valBadgeW / 2, vy - 24, valBadgeW, 15);
-
-                ctx.fillStyle = gateColor;
-                ctx.font = 'bold 8.5px monospace';
-                ctx.textAlign = 'center';
-                ctx.fillText(valLabel, vx, vy - 13);
-              } else {
-                // Ambiguous Candidate Pip (Orange)
+              } else if (config.showGhostCandidates) {
+                // Ambiguous Candidate Pip (Orange) only shown when ghost candidates are enabled
                 ctx.beginPath();
                 ctx.arc(cand.x, cand.y, 6, 0, Math.PI * 2);
-                ctx.strokeStyle = '#ff9900';
+                ctx.strokeStyle = '#d65d0e';
                 ctx.lineWidth = 1.5;
                 ctx.stroke();
-
-                ctx.fillStyle = '#ff9900';
-                ctx.font = '8.5px monospace';
-                ctx.textAlign = 'center';
-                ctx.fillText(`? [0${idx + 1}]`, cand.x, cand.y - 10);
               }
             });
           }
 
-          // B3. FULL 3D MULTILATERATION LOCK [ ⌖ ] (Phosphor Green)
+          // B3. FULL 3D MULTILATERATION LOCK [ ⌖ ] in Vibrant Gruvbox Orange
           else if (res.lockType === 'FULL_3D_LOCK') {
             const estX = displayPos.x;
             const estY = displayPos.y;
+            const reticleColor = '#d65d0e'; // GRUVBOX ORANGE
 
-            // Connect true to estimated with dashed error line
+            // Connect true to estimated with dashed error line in Orange
             ctx.beginPath();
             ctx.moveTo(tag.x, tag.y);
             ctx.lineTo(estX, estY);
-            ctx.strokeStyle = 'rgba(0, 255, 65, 0.7)';
+            ctx.strokeStyle = 'rgba(214, 93, 14, 0.7)';
             ctx.lineWidth = 1.5;
             ctx.setLineDash([3, 3]);
             ctx.stroke();
             ctx.setLineDash([]);
 
-            // Error Badge
-            const midX = (tag.x + estX) / 2;
-            const midY = (tag.y + estY) / 2;
-            ctx.fillStyle = '#010803';
-            ctx.fillRect(midX - 25, midY - 8, 50, 15);
-            ctx.strokeStyle = '#00ff41';
-            ctx.strokeRect(midX - 25, midY - 8, 50, 15);
-
-            ctx.fillStyle = '#00ff41';
-            ctx.font = 'bold 9px monospace';
-            ctx.textAlign = 'center';
-            ctx.fillText(`Δ ${res.errorMeters}M`, midX, midY + 3);
-
-            // 1950s Tracking Gate: [ ⌖ ] in Phosphor Green
+            // Tracking Reticle Gate: [ ⌖ ] in Gruvbox Orange
             const gateR = 12;
-            ctx.strokeStyle = '#00ff41';
+            ctx.strokeStyle = reticleColor;
             ctx.lineWidth = 2;
 
             // 4 Corner Brackets
@@ -1410,52 +1183,37 @@ export const SimulationCanvas: React.FC<SimulationCanvasProps> = ({
             ctx.stroke();
 
             // Center target pip
-            ctx.fillStyle = '#00ff41';
+            ctx.fillStyle = reticleColor;
             ctx.fillRect(estX - 2, estY - 2, 4, 4);
-
-            // 3D Lock Label
-            const lockLabel = res.hypothesisFlipDetected
-              ? '[3D-LOCK: RE-ALIGNED]'
-              : `[3D-LOCK: MULTILAT // Δ ${res.errorMeters}M]`;
-            const badgeW = res.hypothesisFlipDetected ? 160 : 180;
-            ctx.fillStyle = '#010803';
-            ctx.fillRect(estX - badgeW / 2, estY - 26, badgeW, 16);
-            ctx.strokeStyle = '#00ff41';
-            ctx.strokeRect(estX - badgeW / 2, estY - 26, badgeW, 16);
-
-            ctx.fillStyle = '#00ff41';
-            ctx.font = 'bold 8.5px monospace';
-            ctx.textAlign = 'center';
-            ctx.fillText(lockLabel, estX, estY - 14);
           }
         } else if (config.showEstimatedLocations && res && res.lockType === 'BLIND_ZONE' && res.borderExit) {
-          // B4. BLIND ZONE: 0-ANCHOR BORDER EXIT WITH LAST KNOWN POSITION (LKP) in ALERT RED
+          // B4. BLIND ZONE: 0-ANCHOR BORDER EXIT WITH LAST KNOWN POSITION (LKP) in Gruvbox Red
           const lkp = res.borderExit.lastKnownPos;
           const exitSpeedMps = res.borderExit.exitSpeedMps;
           const elapsedSec = res.borderExit.elapsedSeconds;
           const headingDeg = res.borderExit.exitHeadingDeg;
 
-          // Expanding dashed horizon ring in Alert Red
+          // Expanding dashed horizon ring in Gruvbox Red
           const uncertRadius = Math.max(16, Math.min(180, elapsedSec * exitSpeedMps * config.pixelsPerMeter));
           ctx.beginPath();
           ctx.arc(lkp.x, lkp.y, uncertRadius, 0, Math.PI * 2);
-          ctx.strokeStyle = `rgba(255, 59, 48, ${Math.max(0.15, 0.45 - elapsedSec * 0.03)})`;
+          ctx.strokeStyle = `rgba(204, 36, 29, ${Math.max(0.15, 0.45 - elapsedSec * 0.03)})`;
           ctx.lineWidth = 1.5;
           ctx.setLineDash([4, 4]);
           ctx.stroke();
           ctx.setLineDash([]);
 
-          // Pulsing LKP Border Beacon in Alert Red
+          // Pulsing LKP Border Beacon in Gruvbox Red
           const beaconPulse = 0.5 + Math.sin(pulsePhaseRef.current * 1.5) * 0.5;
           ctx.beginPath();
           ctx.arc(lkp.x, lkp.y, 8 + beaconPulse * 4, 0, Math.PI * 2);
-          ctx.strokeStyle = 'rgba(255, 59, 48, 0.5)';
+          ctx.strokeStyle = 'rgba(204, 36, 29, 0.5)';
           ctx.lineWidth = 1.2;
           ctx.stroke();
 
           ctx.beginPath();
           ctx.arc(lkp.x, lkp.y, 4, 0, Math.PI * 2);
-          ctx.fillStyle = '#ff3b30';
+          ctx.fillStyle = '#cc241d';
           ctx.fill();
 
           // Directional Velocity Vector Arrow at Border Exit in Red
@@ -1467,7 +1225,7 @@ export const SimulationCanvas: React.FC<SimulationCanvasProps> = ({
           ctx.beginPath();
           ctx.moveTo(lkp.x, lkp.y);
           ctx.lineTo(tipX, tipY);
-          ctx.strokeStyle = '#ff3b30';
+          ctx.strokeStyle = '#cc241d';
           ctx.lineWidth = 2.5;
           ctx.stroke();
 
@@ -1479,20 +1237,21 @@ export const SimulationCanvas: React.FC<SimulationCanvasProps> = ({
           ctx.lineTo(tipX + Math.cos(leftAngle) * arrowHead, tipY + Math.sin(leftAngle) * arrowHead);
           ctx.lineTo(tipX + Math.cos(rightAngle) * arrowHead, tipY + Math.sin(rightAngle) * arrowHead);
           ctx.closePath();
-          ctx.fillStyle = '#ff3b30';
+          ctx.fillStyle = '#cc241d';
           ctx.fill();
 
-          // LKP Badge in Alert Red
-          ctx.fillStyle = '#140504';
-          ctx.fillRect(lkp.x - 85, lkp.y - 28, 170, 18);
-          ctx.strokeStyle = '#ff3b30';
+          // LKP Badge in Gruvbox Red
+          const lkpWidth = 145;
+          ctx.fillStyle = '#fbf1c7';
+          ctx.fillRect(lkp.x - lkpWidth / 2, lkp.y - 28, lkpWidth, 18);
+          ctx.strokeStyle = '#cc241d';
           ctx.lineWidth = 1.2;
-          ctx.strokeRect(lkp.x - 85, lkp.y - 28, 170, 18);
+          ctx.strokeRect(lkp.x - lkpWidth / 2, lkp.y - 28, lkpWidth, 18);
 
-          ctx.fillStyle = '#ff3b30';
+          ctx.fillStyle = '#cc241d';
           ctx.font = 'bold 8.5px monospace';
           ctx.textAlign = 'center';
-          ctx.fillText(`[CONTACT LOST: T-${elapsedSec}s | θ=${Math.round(headingDeg)}° | ${exitSpeedMps}M/S]`, lkp.x, lkp.y - 16);
+          ctx.fillText(`SIGNAL LOST (T+${elapsedSec}s) • ${exitSpeedMps} m/s`, lkp.x, lkp.y - 16);
         }
       }
 
@@ -1576,11 +1335,11 @@ export const SimulationCanvas: React.FC<SimulationCanvasProps> = ({
       return;
     }
 
-    // 2. TOOL: ADD TIER 1 POLE
-    if (activeTool === 'ADD_TIER1_STOP') {
+    // 2. TOOL: ADD ANCHOR
+    if (activeTool === 'ADD_TIER1_STOP' || (activeTool as any) === 'ADD_TIER2_STOP') {
       const newStop: GeoStop = {
-        id: `pole-${Date.now()}`,
-        name: `Solar Pole #${stops.filter(s => s.tier === 1).length + 1}`,
+        id: `anchor-${Date.now()}`,
+        name: `Anchor #${stops.length + 1}`,
         tier: 1,
         x: mouseX,
         y: mouseY,
@@ -1593,27 +1352,11 @@ export const SimulationCanvas: React.FC<SimulationCanvasProps> = ({
       return;
     }
 
-    // 3. TOOL: ADD TIER 2 EATERY
-    if (activeTool === 'ADD_TIER2_STOP') {
-      const newStop: GeoStop = {
-        id: `eatery-${Date.now()}`,
-        name: `Eatery GeoStop #${stops.filter(s => s.tier === 2).length + 1}`,
-        tier: 2,
-        x: mouseX,
-        y: mouseY,
-        isOnline: true
-      };
-      setStops(prev => [...prev, newStop]);
-      setSelectedEntityId(newStop.id);
-      setActiveTool('SELECT_MOVE');
-      return;
-    }
-
     // 4. TOOL: ADD GEOCENTRE (STRICTLY 1 INSTANCE)
     if (activeTool === 'ADD_GEOCENTRE') {
       const newCentre: GeoCentre = {
         id: 'geocentre-core',
-        name: 'GeoCentre Central Server',
+        name: 'Central Gateway (Admin Block)',
         x: mouseX,
         y: mouseY,
         isOnline: true

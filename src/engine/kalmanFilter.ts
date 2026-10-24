@@ -164,27 +164,26 @@ export class CanineKalmanFilter {
     const dM2 = (s11 * yX * yX - 2.0 * s01 * yX * yY + s00 * yY * yY) / detS;
 
     const now = Date.now();
-    const dt = Math.max(0.01, Math.min(0.25, (now - this.lastUpdateMs) / 1000.0));
 
     // Chi-Square gating: threshold 60.0 allows swift agility during canine sprints while rejecting wall spikes
     if (dM2 > 60.0) {
       this.consecutiveRejections++;
-      if (this.consecutiveRejections >= 2) {
-        // Fast recovery: immediately realign state to measurement to eradicate spatial lag
+      if (this.consecutiveRejections >= 8) {
+        // Prolonged dropout recovery (>400ms): gently realign position, but NEVER inject unphysical velocity spikes
         this.state[0] = meas.x;
         this.state[1] = meas.y;
-        this.state[2] = yX / dt;
-        this.state[3] = yY / dt;
-        this.clampVelocity();
+        this.state[2] = 0;
+        this.state[3] = 0;
 
         // Inflate covariance to reflect transition uncertainty
         this.P[0][0] = Math.min(100.0, this.P[0][0] * 1.5);
         this.P[1][1] = Math.min(100.0, this.P[1][1] * 1.5);
 
         this.lastUpdateMs = now;
+        this.consecutiveRejections = 0;
         return this.getResult(false);
       }
-      // Coast on prediction for single isolated outlier spikes
+      // Smoothly coast on kinematic prediction for outlier noise spikes
       return this.getResult(true);
     }
 
@@ -233,11 +232,11 @@ export class CanineKalmanFilter {
   }
 
   /**
-   * Soft-bounds velocity magnitude with generous catch-up headroom (up to 25.0 m/s),
-   * ensuring the filter never starves position convergence while preventing runaway divergence.
+   * Soft-bounds velocity magnitude with generous catch-up headroom (up to 18.0 m/s),
+   * ensuring the filter never starves position convergence or drags behind during agile canine sprints.
    */
   private clampVelocity(): void {
-    const maxCatchUpMps = Math.max(25.0, this.maxSpeedMps * 2.0);
+    const maxCatchUpMps = Math.max(18.0, this.maxSpeedMps * 2.0);
     const maxPixPerSec = maxCatchUpMps * this.pixelsPerMeter;
     const currentSpeedPix = Math.sqrt(this.state[2] * this.state[2] + this.state[3] * this.state[3]);
 
