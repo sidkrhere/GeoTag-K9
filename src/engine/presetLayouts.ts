@@ -10,11 +10,11 @@ export function getIITRoparPreset(width: number, height: number): {
   const cx = width / 2;
   const cy = height / 2;
 
-  // Single clean campus complex: K9 Academic & Research Hub
+  // Single clean campus complex: Admin Block
   const buildings: BuildingPolygon[] = [
     {
       id: 'b-main-complex',
-      name: 'K9 Central Innovation Complex',
+      name: 'Admin Block',
       closed: true,
       attenuationDb: 14,
       color: 'rgba(40, 10, 8, 0.45)',
@@ -27,82 +27,81 @@ export function getIITRoparPreset(width: number, height: number): {
     }
   ];
 
-  // Exactly 1 GeoCentre placed atop the central building roof
+  // Exactly 1 Central Gateway placed atop the Admin Block roof (positioned below the Admin Block title)
   const centre: GeoCentre = {
     id: 'geocentre-core',
-    name: 'GeoCentre (Rooftop Master Hub)',
+    name: 'Central Gateway (Admin Block)',
     x: cx,
-    y: cy,
+    y: cy + 26,
     isOnline: true
   };
 
-  // 7 GeoStops: 5 Tier 1 Solar Poles + 2 Tier 2 Anchors
-  // Arranged across the campus complex to showcase 3D locks, 2-anchor outcasting, and 15" wall NLOS zero-weighting
+  // 7 Unified UWB Anchors arranged across the campus complex
   const stops: GeoStop[] = [
-    // 1. North High-Mast Solar Pole (Tier 1)
+    // 1. Anchor #1 (North Plaza)
     {
       id: 'stop-north',
-      name: 'North Plaza Mast #1',
+      name: 'Anchor #1 (North Plaza)',
       tier: 1,
       x: cx,
       y: cy - 190,
       isOnline: true,
       batteryMv: 4180
     },
-    // 2. Solar Pole #3 near Turn #1 (Tier 1)
+    // 2. Anchor #2 (Northwest Plaza)
     {
       id: 'stop-solar-3',
-      name: 'Solar Pole #3',
+      name: 'Anchor #2 (Northwest Plaza)',
       tier: 1,
       x: cx - 170,
       y: cy - 110,
       isOnline: true,
       batteryMv: 4150
     },
-    // 3. Solar Pole #4 near Turn #2 (Tier 1)
+    // 3. Anchor #3 (Northeast Plaza)
     {
       id: 'stop-solar-4',
-      name: 'Solar Pole #4',
+      name: 'Anchor #3 (Northeast Plaza)',
       tier: 1,
       x: cx + 170,
       y: cy - 110,
       isOnline: true,
       batteryMv: 4160
     },
-    // 4. East Veranda Anchor #2 (Tier 2 Eatery / Ground-Level)
+    // 4. Anchor #4 (East Veranda)
     {
       id: 'stop-east',
-      name: 'East Veranda Anchor #2',
-      tier: 2,
+      name: 'Anchor #4 (East Veranda)',
+      tier: 1,
       x: cx + 210,
       y: cy + 15,
       isOnline: true
     },
-    // 5. Solar Pole #5 near Turn #3 (Tier 1)
+    // 5. Anchor #5 (Southeast Plaza)
     {
       id: 'stop-solar-5',
-      name: 'Solar Pole #5',
+      name: 'Anchor #5 (Southeast Plaza)',
       tier: 1,
       x: cx + 170,
       y: cy + 100,
       isOnline: true,
       batteryMv: 4140
     },
-    // 6. South Promenade Mast #3 (Tier 1)
+    // 6. Anchor #6 (South Promenade)
     {
       id: 'stop-south',
-      name: 'South Promenade Mast #3',
+      name: 'Anchor #6 (South Promenade)',
       tier: 1,
       x: cx,
       y: cy + 190,
       isOnline: true,
       batteryMv: 4120
     },
-    // 7. West Garden Courtyard Anchor #4 (Tier 2 Eatery / Ground-Level)
+    // 7. Anchor #7 (West Garden)
     {
       id: 'stop-west',
-      name: 'West Garden Anchor #4',
-      tier: 2,
+      name: 'Anchor #7 (West Garden)',
+      tier: 1,
       x: cx - 210,
       y: cy + 90,
       isOnline: true
@@ -122,7 +121,7 @@ export function getIITRoparPreset(width: number, height: number): {
   const tags: GeoTag[] = [
     {
       id: 'k9-bruno',
-      name: 'TRK-01 (Bruno)',
+      name: 'Bruno',
       x: cx - 165,
       y: cy - 120,
       vx: 0,

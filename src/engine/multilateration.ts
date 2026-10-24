@@ -1,11 +1,12 @@
 import { Point2D, GeoStop, GeoTag, SignalMeasurement, TrilaterationResult, SimulationConfig, BuildingPolygon, LockType, BorderExitInfo, HistoricalFix } from '../types/simulation';
-import { distance, signedCrossProduct, isDeepInsidePolygon } from './geometry';
+import { distance, isDeepInsidePolygon } from './geometry';
 import { CanineKalmanFilter } from './kalmanFilter';
 
 const lastConfirmedFixMap = new Map<string, { pos: Point2D; timestamp: number; anchorCount: number; velocity: Point2D }>();
 const kalmanFilterMap = new Map<string, CanineKalmanFilter>();
 const borderExitStateMap = new Map<string, BorderExitInfo>();
 const dogHistoricalFixMap = new Map<string, HistoricalFix[]>();
+const anchorRangeFilterMap = new Map<string, Map<string, number>>();
 const MAX_HISTORY_SAMPLES = 15;
 
 /**
@@ -53,10 +54,16 @@ export function computeHistoricalVelocity(history: HistoricalFix[]): Point2D {
     totalWeight += weight;
   }
 
-  return {
-    x: totalWeight > 0 ? totalVx / totalWeight : 0,
-    y: totalWeight > 0 ? totalVy / totalWeight : 0
-  };
+  const vx = totalWeight > 0 ? totalVx / totalWeight : 0;
+  const vy = totalWeight > 0 ? totalVy / totalWeight : 0;
+  const speed = Math.hypot(vx, vy);
+  const maxSpeedPix = 16.0 * 2.8; // 16.0 m/s physical canine agile dynamic headroom
+  if (speed > maxSpeedPix && speed > 1e-4) {
+    const scale = maxSpeedPix / speed;
+    return { x: vx * scale, y: vy * scale };
+  }
+
+  return { x: vx, y: vy };
 }
 
 interface TransitionState {
@@ -65,7 +72,22 @@ interface TransitionState {
   entryFix: Point2D;
 }
 
+interface DualBranchState {
+  b1: Point2D;
+  b2: Point2D;
+  timestamp: number;
+}
+
+interface BaselineSideState {
+  anchor1Id: string;
+  anchor2Id: string;
+  hDeadReckonM: number;
+  lastTimestamp: number;
+}
+
 const transitionStateMap = new Map<string, TransitionState>();
+const dualBranchMap = new Map<string, DualBranchState>();
+const baselineSideMap = new Map<string, BaselineSideState>();
 
 /**
  * Resets any tracking state for a dog.
@@ -75,10 +97,27 @@ export function resetDogTrajectory(tagId: string, pos: Point2D): void {
   transitionStateMap.delete(tagId);
   borderExitStateMap.delete(tagId);
   dogHistoricalFixMap.delete(tagId);
+  anchorRangeFilterMap.delete(tagId);
+  dualBranchMap.delete(tagId);
+  baselineSideMap.delete(tagId);
   const kf = kalmanFilterMap.get(tagId);
   if (kf) {
     kf.reset(pos);
   }
+}
+
+/**
+ * Completely clears all persistent tracking state across all dogs.
+ */
+export function resetAllTrackingState(): void {
+  lastConfirmedFixMap.clear();
+  kalmanFilterMap.clear();
+  transitionStateMap.clear();
+  borderExitStateMap.clear();
+  dogHistoricalFixMap.clear();
+  anchorRangeFilterMap.clear();
+  dualBranchMap.clear();
+  baselineSideMap.clear();
 }
 
 /**
@@ -196,11 +235,18 @@ function solveGaussNewton(
       r2 += jy * wR;
     }
 
-    const det = j11 * j22 - j12 * j12;
+    // Damped Levenberg-Marquardt regularization:
+    // Prevents det -> 0 when anchors are nearly collinear along boundaries.
+    const lambda = 0.25;
+    const a11 = j11 + lambda;
+    const a22 = j22 + lambda;
+    const det = a11 * a22 - j12 * j12;
     if (Math.abs(det) < 1e-6) break;
 
-    const deltaX = -(j22 * r1 - j12 * r2) / det;
-    const deltaY = -(-j12 * r1 + j11 * r2) / det;
+    const rX = r1 + lambda * (estX - initialGuess.x);
+    const rY = r2 + lambda * (estY - initialGuess.y);
+    const deltaX = -(a22 * rX - j12 * rY) / det;
+    const deltaY = -(-j12 * rX + a11 * rY) / det;
 
     estX += deltaX * damping;
     estY += deltaY * damping;
@@ -219,14 +265,15 @@ export function solveTrilateration(
   measurements: SignalMeasurement[],
   stopsMap: Map<string, GeoStop>,
   config: SimulationConfig,
-  buildings: BuildingPolygon[] = []
+  buildings: BuildingPolygon[] = [],
+  currentTimeMs?: number
 ): TrilaterationResult {
-  const now = Date.now();
+  const now = currentTimeMs ?? Date.now();
 
-  // Canine biological kinematic ceiling: provide full dynamic bandwidth (15.0 m/s ceiling)
-  // so the filter is never velocity-starved regardless of user speed setting or transient catch-up.
+  // Canine biological kinematic ceiling: provide full dynamic bandwidth (16.0 m/s ceiling)
+  // so the filter never drags behind during agile canine maneuvers while preventing runaway spikes.
   const canineTargetSpeedMps = config.autoWalkSpeed ?? 2.5;
-  const simMaxSpeedMps = Math.max(15.0, canineTargetSpeedMps * 1.5);
+  const simMaxSpeedMps = Math.max(16.0, canineTargetSpeedMps * 2.5);
 
   // Retrieve or initialize the Dynamic Velocity-Bounded Kalman Filter for this canine
   let kf = kalmanFilterMap.get(tag.id);
@@ -288,10 +335,30 @@ export function solveTrilateration(
         measurement: m
       });
     } else {
+      // Innovation Gating & Exponential Noise Spike Suppression:
+      // 1. Cap to physical radio horizon for this anchor
+      const maxHorizonMeters = config.anchorRadiusMeters ?? (stop.tier === 1 ? config.tier1RadiusMeters : config.tier2RadiusMeters) ?? 90;
+      const rawRadiusPix = Math.min(m.noisyDistanceMeters, maxHorizonMeters) * config.pixelsPerMeter;
+
+      // 2. Innovation gating & rate-limiting against canine kinematic velocity
+      let anchorCache = anchorRangeFilterMap.get(tag.id);
+      if (!anchorCache) {
+        anchorCache = new Map();
+        anchorRangeFilterMap.set(tag.id, anchorCache);
+      }
+      let prevR = anchorCache.get(stop.id);
+      if (prevR === undefined) {
+        prevR = rawRadiusPix;
+      }
+      const maxDeltaPix = 3.0 * config.pixelsPerMeter; // 3.0m per tick = 60 m/s equivalent dynamic agility headroom
+      const clampedR = Math.max(prevR - maxDeltaPix, Math.min(prevR + maxDeltaPix, rawRadiusPix));
+      const smoothedR = prevR * 0.40 + clampedR * 0.60;
+      anchorCache.set(stop.id, smoothedR);
+
       validAnchors.push({
         id: stop.id,
         point: { x: stop.x, y: stop.y },
-        radius: m.noisyDistanceMeters * config.pixelsPerMeter,
+        radius: smoothedR,
         measurement: m
       });
     }
@@ -417,15 +484,15 @@ export function solveTrilateration(
     };
   }
 
-  // Case 2: Exactly 2 Clean Anchors in range (Orthogonal 3D Bayesian MAP Fusion)
+  // Case 2: Exactly 2 Clean Anchors in range (Orthogonal 3D Bayesian MAP Fusion & Dual-Branch MHT)
   if (validAnchors.length === 2) {
     const a1 = validAnchors[0];
     const a2 = validAnchors[1];
 
-    const [cand1, cand2] = findTwoCircleIntersections(a1.point, a1.radius, a2.point, a2.radius);
+    const [raw1, raw2] = findTwoCircleIntersections(a1.point, a1.radius, a2.point, a2.radius);
 
-    const cand1InBuilding = buildings.some(b => b.closed && isDeepInsidePolygon(cand1, b.points, 12));
-    const cand2InBuilding = buildings.some(b => b.closed && isDeepInsidePolygon(cand2, b.points, 12));
+    const raw1InBuilding = buildings.some(b => b.closed && isDeepInsidePolygon(raw1, b.points, 12));
+    const raw2InBuilding = buildings.some(b => b.closed && isDeepInsidePolygon(raw2, b.points, 12));
 
     // Dorsal Spine e-Compass Unit Heading Vector (strictly pointing along canine motion axis):
     // 0° = North (0, -1), 90° = East (1, 0), 180° = South (0, 1), 270° = West (-1, 0)
@@ -434,60 +501,160 @@ export function solveTrilateration(
       y: -Math.cos(headingRad)
     };
 
-    // Prior confirmed position (or initial tag position if cold boot)
-    const priorPt = prior?.pos ?? { x: tag.x, y: tag.y };
-    const separationChordMeters = Math.round((distance(cand1, cand2) / config.pixelsPerMeter) * 10) / 10;
+    const separationChordMeters = Math.round((distance(raw1, raw2) / config.pixelsPerMeter) * 10) / 10;
 
-    // Baseline half-plane geometry: The directed line from anchor 1 to anchor 2
-    // separates the two circle intersection candidates into opposite half-planes.
-    const side1 = signedCrossProduct(a1.point, a2.point, cand1);
-    const side2 = signedCrossProduct(a1.point, a2.point, cand2);
-    const priorSide = signedCrossProduct(a1.point, a2.point, priorPt);
+    const rawDt = (now - (prior?.timestamp ?? (now - 50))) / 1000.0;
+    const dtSec = Math.max(0.02, Math.min(0.20, rawDt));
 
-    const isSameSide1 = Math.sign(side1) === Math.sign(priorSide) || Math.abs(priorSide) < 1e-4;
-    const isSameSide2 = Math.sign(side2) === Math.sign(priorSide) || Math.abs(priorSide) < 1e-4;
+    // Forward Kinematic Momentum Projection:
+    const stepDistM = canineTargetSpeedMps * dtSec;
+    const canineSpeedPix = stepDistM * config.pixelsPerMeter;
 
-    // Evaluator balancing Vector Cosine Alignment and Prior Proximity:
-    // 1. Vector Cosine Alignment: rewards candidate aligned with dorsal motion vector
-    // 2. Kinematic Distance Penalty: penalizes leap distance from prior position
-    // 3. Baseline Half-Plane Guard: blocks teleporting across wide chords (> 8m)
-    // 4. Deep Building Occlusion: penalizes true interior ghosts, but ignores sidewalk jitter
-    function evaluateCandidate(cand: Point2D, inBuilding: boolean, isSameSide: boolean) {
-      const dx = cand.x - priorPt.x;
-      const dy = cand.y - priorPt.y;
-      const distPix = Math.hypot(dx, dy);
-      const distM = distPix / config.pixelsPerMeter;
+    // Baseline vector between the 2 anchors:
+    const bx = a2.point.x - a1.point.x;
+    const by = a2.point.y - a1.point.y;
+    const bLen = Math.hypot(bx, by) || 1;
+    const getH = (p: Point2D) => (bx * (p.y - a1.point.y) - by * (p.x - a1.point.x)) / bLen / config.pixelsPerMeter;
 
-      // 1. Vector Cosine Alignment
-      const align = distPix > 0.5 ? (dx * uCompass.x + dy * uCompass.y) / distPix : 1.0;
-      const alignScore = -align * 50.0;
+    // Cross-heading kinematic displacement across baseline:
+    const deltaH = (bx * (uCompass.y * stepDistM) - by * (uCompass.x * stepDistM)) / bLen;
 
-      // 2. Distance from Prior Fix (3.5 per meter)
-      const distScore = distM * 3.5;
+    // Persistent signed baseline side dead-reckoning:
+    let sideState = baselineSideMap.get(tag.id);
+    if (!sideState || sideState.anchor1Id !== a1.id || sideState.anchor2Id !== a2.id || (now - sideState.lastTimestamp > 1000)) {
+      const seedPos = prior?.pos ?? { x: tag.x, y: tag.y };
+      sideState = {
+        anchor1Id: a1.id,
+        anchor2Id: a2.id,
+        hDeadReckonM: getH(seedPos),
+        lastTimestamp: now
+      };
+      baselineSideMap.set(tag.id, sideState);
+    } else {
+      sideState.hDeadReckonM += deltaH;
+      sideState.lastTimestamp = now;
+    }
+    const expectedSign = sideState.hDeadReckonM >= 0 ? 1 : -1;
 
-      // 3. Baseline Half-Plane Guard: only active when chord is wide (> 8m)
-      const chordPenalty = (!isSameSide && separationChordMeters > 8.0) ? (separationChordMeters * 6.0) : 0.0;
+    // Dual-Branch Multi-Hypothesis Association:
+    let branchState = dualBranchMap.get(tag.id);
+    let cand1 = raw1;
+    let cand2 = raw2;
+    let cand1InBuilding = raw1InBuilding;
+    let cand2InBuilding = raw2InBuilding;
 
-      // 4. Deep Building Wall Penalty (only for points > 3.5m inside the building envelope)
-      const wallScore = inBuilding ? 40.0 : 0.0;
-
-      const score = alignScore + distScore + chordPenalty + wallScore;
-      return { score, align, distM };
+    if (!branchState || (now - branchState.timestamp > 1000)) {
+      const hRaw1 = getH(raw1);
+      const sign1 = hRaw1 >= 0 ? 1 : -1;
+      if (sign1 === expectedSign) {
+        cand1 = raw1; cand2 = raw2;
+        cand1InBuilding = raw1InBuilding; cand2InBuilding = raw2InBuilding;
+      } else {
+        cand1 = raw2; cand2 = raw1;
+        cand1InBuilding = raw2InBuilding; cand2InBuilding = raw1InBuilding;
+      }
+      branchState = { b1: cand1, b2: cand2, timestamp: now };
+      dualBranchMap.set(tag.id, branchState);
+    } else {
+      const costKeep = distance(raw1, branchState.b1) + distance(raw2, branchState.b2);
+      const costSwap = distance(raw1, branchState.b2) + distance(raw2, branchState.b1);
+      if (costSwap < costKeep) {
+        cand1 = raw2; cand2 = raw1;
+        cand1InBuilding = raw2InBuilding; cand2InBuilding = raw1InBuilding;
+      }
     }
 
-    const res1 = evaluateCandidate(cand1, cand1InBuilding, isSameSide1);
-    const res2 = evaluateCandidate(cand2, cand2InBuilding, isSameSide2);
+    // Branch 1 Kinematic & Angular Evaluation:
+    const v1x = (cand1.x - branchState.b1.x) / config.pixelsPerMeter;
+    const v1y = (cand1.y - branchState.b1.y) / config.pixelsPerMeter;
+    const s1M = Math.hypot(v1x, v1y);
+    const align1 = s1M > 0.005 ? Math.max(-1.0, Math.min(1.0, (v1x * uCompass.x + v1y * uCompass.y) / s1M)) : 1.0;
+    const exp1: Point2D = {
+      x: branchState.b1.x + uCompass.x * canineSpeedPix,
+      y: branchState.b1.y + uCompass.y * canineSpeedPix
+    };
+    const distPred1M = distance(cand1, exp1) / config.pixelsPerMeter;
+    const h1 = getH(cand1);
+    const diffH1 = Math.abs(h1 - sideState.hDeadReckonM);
 
-    const validatedIdx: 0 | 1 = res1.score <= res2.score ? 0 : 1;
+    // Branch 2 Kinematic & Angular Evaluation:
+    const v2x = (cand2.x - branchState.b2.x) / config.pixelsPerMeter;
+    const v2y = (cand2.y - branchState.b2.y) / config.pixelsPerMeter;
+    const s2M = Math.hypot(v2x, v2y);
+    const align2 = s2M > 0.005 ? Math.max(-1.0, Math.min(1.0, (v2x * uCompass.x + v2y * uCompass.y) / s2M)) : 1.0;
+    const exp2: Point2D = {
+      x: branchState.b2.x + uCompass.x * canineSpeedPix,
+      y: branchState.b2.y + uCompass.y * canineSpeedPix
+    };
+    const distPred2M = distance(cand2, exp2) / config.pixelsPerMeter;
+    const h2 = getH(cand2);
+    const diffH2 = Math.abs(h2 - sideState.hDeadReckonM);
+
+    // Configuration & Cost Function:
+    const disambiguationMode = config.disambiguationMode ?? 'QUADRATIC_MAP';
+    const W_DIST = disambiguationMode === 'QUADRATIC_MAP' ? 3.0 : 4.5;
+    const W_ANGLE = 25.0;
+
+    const score1 = (3.0 * distPred1M + 2.0 * distPred1M * distPred1M) +
+                   W_ANGLE * (1.0 - align1) +
+                   (4.0 * diffH1 + 2.0 * diffH1 * diffH1) +
+                   (cand1InBuilding ? 60.0 : 0.0);
+
+    const score2 = (3.0 * distPred2M + 2.0 * distPred2M * distPred2M) +
+                   W_ANGLE * (1.0 - align2) +
+                   (4.0 * diffH2 + 2.0 * diffH2 * diffH2) +
+                   (cand2InBuilding ? 60.0 : 0.0);
+
+    // Decision Logic Gate:
+    let validatedIdx: 0 | 1;
+    let reason: string;
+
+    if (cand1InBuilding !== cand2InBuilding) {
+      validatedIdx = cand1InBuilding ? 1 : 0;
+      reason = `Map Occlusion: Outcast ghost in building wall (Δ${separationChordMeters}m chord)`;
+    } else if (disambiguationMode === 'HIERARCHICAL_GATE') {
+      const sign1 = h1 >= 0 ? 1 : -1;
+      const sign2 = h2 >= 0 ? 1 : -1;
+      if (align1 >= 0.80 && align2 < 0.65) {
+        validatedIdx = 0;
+        reason = `Compass Alignment Gate: Forward heading lock (+${align1.toFixed(2)} vs ${align2.toFixed(2)})`;
+      } else if (align2 >= 0.80 && align1 < 0.65) {
+        validatedIdx = 1;
+        reason = `Compass Alignment Gate: Forward heading lock (+${align2.toFixed(2)} vs ${align1.toFixed(2)})`;
+      } else if (separationChordMeters > 1.8 && sign1 !== sign2) {
+        validatedIdx = sign1 === expectedSign ? 0 : 1;
+        reason = `Spatial Gate: Baseline side match (${(validatedIdx === 0 ? sign1 : sign2) === 1 ? 'Pos' : 'Neg'} half-plane, Δ${separationChordMeters}m chord)`;
+      } else if (distPred1M < distPred2M - 1.2) {
+        validatedIdx = 0;
+        reason = `Spatial Gate: Closer kinematic displacement (${distPred1M.toFixed(1)}m vs ${distPred2M.toFixed(1)}m)`;
+      } else if (distPred2M < distPred1M - 1.2) {
+        validatedIdx = 1;
+        reason = `Spatial Gate: Closer kinematic displacement (${distPred2M.toFixed(1)}m vs ${distPred1M.toFixed(1)}m)`;
+      } else {
+        validatedIdx = score1 <= score2 ? 0 : 1;
+        reason = `Collinear Tie-Breaker: MAP cost J=${Math.round((validatedIdx === 0 ? score1 : score2) * 10) / 10}`;
+      }
+    } else {
+      // Option A: Continuous Quadratic MAP
+      validatedIdx = score1 <= score2 ? 0 : 1;
+      reason = `Quadratic MAP: J=${Math.round((validatedIdx === 0 ? score1 : score2) * 10) / 10} vs ${Math.round((validatedIdx === 0 ? score2 : score1) * 10) / 10} (d=${(validatedIdx === 0 ? distPred1M : distPred2M).toFixed(1)}m, Δh=${(validatedIdx === 0 ? diffH1 : diffH2).toFixed(1)}m)`;
+    }
+
     const chosen = validatedIdx === 0 ? cand1 : cand2;
     const outcast = validatedIdx === 0 ? cand2 : cand1;
-    const chosenEval = validatedIdx === 0 ? res1 : res2;
-    const outcastEval = validatedIdx === 0 ? res2 : res1;
+    const chosenEval = { score: validatedIdx === 0 ? score1 : score2, align: validatedIdx === 0 ? align1 : align2, distM: validatedIdx === 0 ? distPred1M : distPred2M };
+    const outcastEval = { score: validatedIdx === 0 ? score2 : score1, align: validatedIdx === 0 ? align2 : align1, distM: validatedIdx === 0 ? distPred2M : distPred1M };
 
-    // Update Kalman filter directly with validated candidate (zero lag!)
-    const kfRes = kf.update(chosen, 1.8);
-    // Blue crosshair error directly linked to validated candidate
-    const blueCrosshairErrMeters = Math.round((distance({ x: tag.x, y: tag.y }, chosen) / config.pixelsPerMeter) * 10) / 10;
+    branchState.b1 = cand1;
+    branchState.b2 = cand2;
+    branchState.timestamp = now;
+
+    // Dynamic measurement uncertainty scaling based on separation chord (GDOP)
+    const effectiveMeasStdDevM = Math.max(1.8, Math.min(5.0, separationChordMeters * 0.25));
+    const kfRes = kf.update(chosen, effectiveMeasStdDevM);
+
+    // True system tracking error to Kalman estimated position
+    const systemErrMeters = Math.round((distance({ x: tag.x, y: tag.y }, kfRes.pos) / config.pixelsPerMeter) * 10) / 10;
 
     // Save confirmed fix
     lastConfirmedFixMap.set(tag.id, {
@@ -505,9 +672,8 @@ export function solveTrilateration(
 
     const lockType: LockType = 'DUAL_PINPOINT_LOCK';
 
-    const reason = cand1InBuilding !== cand2InBuilding
-      ? `Map Occlusion: Outcast ghost in building wall (Δ${separationChordMeters}m chord)`
-      : `Fused Pinpoint: Alignment +${Math.round(chosenEval.align * 100) / 100} vs ${Math.round(outcastEval.align * 100) / 100} (Δ${Math.round(chosenEval.distM * 10) / 10}m vs Δ${Math.round(outcastEval.distM * 10) / 10}m)`;
+    const candidate1ErrMeters = Math.round((distance({ x: tag.x, y: tag.y }, chosen) / config.pixelsPerMeter) * 10) / 10;
+    const candidate2ErrMeters = Math.round((distance({ x: tag.x, y: tag.y }, outcast) / config.pixelsPerMeter) * 10) / 10;
 
     const fix: HistoricalFix = {
       x: kfRes.pos.x,
@@ -517,7 +683,7 @@ export function solveTrilateration(
       vy: kfRes.velocity.y,
       speedMps: kfRes.speedMps,
       lockType,
-      errorMeters: blueCrosshairErrMeters,
+      errorMeters: systemErrMeters,
       headingDeg
     };
     const historyTrail = recordHistoricalFix(tag.id, fix);
@@ -527,7 +693,7 @@ export function solveTrilateration(
       tagId: tag.id,
       estimatedX: kfRes.pos.x,
       estimatedY: kfRes.pos.y,
-      errorMeters: blueCrosshairErrMeters,
+      errorMeters: systemErrMeters,
       lockType,
       dualCandidates: [cand1, cand2],
       dualInfo: {
@@ -538,16 +704,16 @@ export function solveTrilateration(
         outcastLeapMeters: separationChordMeters,
         separationChordMeters,
         reason,
-        candidate1ErrorMeters: blueCrosshairErrMeters,
-        candidate2ErrorMeters: Math.round((distance({ x: tag.x, y: tag.y }, outcast) / config.pixelsPerMeter) * 10) / 10,
+        candidate1ErrorMeters: candidate1ErrMeters,
+        candidate2ErrorMeters: candidate2ErrMeters,
         candidate1VectorAlignment: Math.round(chosenEval.align * 100) / 100,
         candidate2VectorAlignment: Math.round(outcastEval.align * 100) / 100,
         candidate1Score: Math.round(chosenEval.score * 100) / 100,
         candidate2Score: Math.round(outcastEval.score * 100) / 100,
         candidate1DistMeters: Math.round(chosenEval.distM * 10) / 10,
         candidate2DistMeters: Math.round(outcastEval.distM * 10) / 10,
-        kinematicWeight: 0.70,
-        compassWeight: 0.30,
+        kinematicWeight: W_DIST,
+        compassWeight: W_ANGLE,
         compassHeadingDeg: headingDeg,
         transitionDelayMs: 0,
         isTransitionBuffering: false

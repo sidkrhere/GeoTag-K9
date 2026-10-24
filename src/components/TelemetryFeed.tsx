@@ -24,178 +24,150 @@ export const TelemetryFeed: React.FC<TelemetryFeedProps> = ({
   const selectedResult = results.find(r => r.tagId === selectedTagId);
 
   return (
-    <footer className="radar-panel fixed bottom-3 left-4 right-4 z-20 font-mono text-[#00ff41]">
-      {/* 1950s Teleprinter Summary Bar */}
-      <div className="flex items-center justify-between px-3 py-2 text-xs bg-[#020b04]">
-        <div className="flex items-center gap-3">
-          <div className="flex items-center gap-2">
-            <span className="text-[10px] px-1.5 py-0.5 border border-[#00f2fe] bg-[#001f22] text-[#00f2fe] font-bold">
-              SIGINT-FEED
+    <footer className="radar-panel fixed bottom-3 left-4 right-4 z-20 font-mono text-[#282828]">
+      {/* Telemetry Summary Bar */}
+      <div className="flex items-center justify-between px-3 py-1.5 text-xs bg-[#f2e5bc]">
+        <div className="flex items-center gap-2.5">
+          <div className="flex items-center gap-1.5">
+            <span className="text-[10px] px-1.5 py-0.5 border border-[#458588] bg-[#ebf2f2] text-[#076678] font-bold rounded">
+              GATEWAY LOG
             </span>
-            <span className="font-bold text-[#00f2fe] glow-cyan">GEOCENTRE MASTER TELEPRINTER</span>
-            <span className="text-[#00551a]">|</span>
-            <span className="text-[#00aa33]">ACTIVE TRACKS: <b className="text-[#00f2fe]">{tags.length}</b></span>
+            <span className="font-bold text-[#282828]">NETWORK ONLINE</span>
+            <span className="text-[#bdae93]">|</span>
+            <span className="text-[#7c6f64]">ACTIVE TAGS: <b className="text-[#076678] font-mono tabular-nums">{tags.length}</b></span>
           </div>
 
           {selectedDog && (
-            <div className="flex items-center gap-2 pl-3 border-l border-[#00551a] text-[11px]">
-              <span className="text-[#00aa33]">TARGET:</span>
-              <span className="text-[#00f2fe] font-bold glow-cyan">{selectedDog.name.toUpperCase()}</span>
+            <div className="flex items-center gap-2 pl-2.5 border-l border-[#d5c4a1] text-[11px]">
+              <span className="text-[#7c6f64] font-semibold">TARGET:</span>
+              <span className="text-[#076678] font-bold">{selectedDog.name.toUpperCase()}</span>
 
-              {/* Dorsal Azimuth Dial */}
-              <div className="px-1.5 py-0.5 border border-[#007780] bg-[#001418] text-[#00f2fe] text-[10px]">
-                AZ: {Math.round(selectedDog.headingDeg ?? 90)}° {selectedDog.compassData?.cardinal ?? 'E'} (DORSAL)
+              {/* Dorsal Heading */}
+              <div className="px-1.5 py-0.5 border border-[#d5c4a1] bg-[#fbf1c7] text-[#282828] text-[10px] rounded font-mono tabular-nums min-w-[70px] text-center">
+                {Math.round(selectedDog.headingDeg ?? 90)}° {selectedDog.compassData?.cardinal ?? 'E'}
               </div>
 
               {selectedResult && (
-                <div className="flex items-center gap-2">
+                <div className="flex items-center gap-1.5">
                   {selectedResult.lockType === 'BLIND_ZONE' && selectedResult.borderExit ? (
-                    <span className="text-[10px] border border-[#ff3b30] bg-[#220705] text-[#ff3b30] px-1.5 py-0.5 font-bold glow-red">
-                      [BLIND ZONE // LKP BRG {Math.round(selectedResult.borderExit.exitHeadingDeg)}° // VEL {selectedResult.borderExit.exitSpeedMps}M/S]
+                    <span className="text-[10px] border border-[#fb4934] bg-[#fae6e4] text-[#cc241d] px-1.5 py-0.5 font-bold rounded">
+                      SIGNAL LOST (T+{selectedResult.borderExit.elapsedSeconds}s)
                     </span>
                   ) : (
-                    <span className="text-[10px] border border-[#00551a] px-1.5 py-0.5">
-                      <span className={selectedResult.errorMeters < 3 ? 'text-[#00ff41]' : selectedResult.errorMeters < 7 ? 'text-[#ff9900]' : 'text-[#ff3b30]'}>
-                        Δ {selectedResult.errorMeters}M
+                    <span className="text-[10px] border border-[#d5c4a1] bg-[#fbf1c7] px-1.5 py-0.5 rounded font-mono tabular-nums min-w-[76px] text-center inline-block">
+                      <span className={`font-bold ${selectedResult.errorMeters < 3 ? 'text-[#79740e]' : selectedResult.errorMeters < 7 ? 'text-[#d65d0e]' : 'text-[#cc241d]'}`}>
+                        Δ {selectedResult.errorMeters.toFixed(1)} m
                       </span>
-                      {selectedResult.lockType === 'DUAL_PINPOINT_LOCK' && selectedResult.dualInfo && (
-                        <span className="text-[#00f2fe]">
-                          {' '}| MATCH: +{selectedResult.dualInfo.candidate1VectorAlignment} | <span className="text-[#ff3b30]">GHOST: Δ{selectedResult.dualInfo.candidate2ErrorMeters}M</span>
-                        </span>
-                      )}
-                      {selectedResult.lockType === 'DUAL_KINEMATIC_LOCK' && selectedResult.dualInfo && (
-                        <span className="text-[#ff9900]">
-                          {' '}| <span className="text-[#ff3b30]">GHOST: Δ{selectedResult.dualInfo.candidate2ErrorMeters}M</span>
-                        </span>
-                      )}
                     </span>
                   )}
 
-                  <div className="px-1.5 py-0.5 border border-[#00551a] bg-[#010903] text-[10px]">
-                    <span className="text-[#008826]">VEL: </span>
-                    <span className="text-[#00f2fe] font-bold">ACT {selectedDog.speedMps ?? selectedResult.actualSpeedMps ?? 0}</span>
-                    <span className="text-[#00551a]"> / </span>
-                    <span className="text-[#00ff41] font-bold">KF {selectedResult.speedMps ?? 0} M/S</span>
+                  <div className="px-1.5 py-0.5 border border-[#d5c4a1] bg-[#fbf1c7] text-[10px] rounded font-mono tabular-nums min-w-[130px] text-center">
+                    <span className="text-[#7c6f64]">VEL: </span>
+                    <span className="text-[#076678] font-bold">{(selectedDog.speedMps ?? selectedResult.actualSpeedMps ?? 0).toFixed(1)}</span>
+                    <span className="text-[#bdae93]"> / </span>
+                    <span className="text-[#79740e] font-bold">{(selectedResult.speedMps ?? 0).toFixed(1)} m/s</span>
                   </div>
                 </div>
               )}
 
               <button
                 onClick={() => onToggleImuResting(selectedDog.id)}
-                title="Toggle IMU Target Harness State (Standby / Moving)"
+                title="Toggle IMU Target Harness State (Standby / Active)"
                 className={`radar-key ${selectedDog.imuResting ? 'radar-key-orange radar-key-active' : 'radar-key-cyan'} text-[10px] py-0.5 px-2`}
               >
-                <span>{selectedDog.imuResting ? 'HARNESS: DORMANT' : 'HARNESS: ENGAGED'}</span>
+                <span>{selectedDog.imuResting ? 'COLLAR: STANDBY' : 'COLLAR: ACTIVE'}</span>
               </button>
             </div>
           )}
         </div>
 
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-1.5">
           {hasSelection && (
             <button
               onClick={onDeleteSelected}
-              className="radar-key radar-key-red text-[10px] py-1"
+              className="radar-key radar-key-red text-[10px] py-0.5 px-2"
             >
-              <span>PURGE TARGET</span>
+              <span>DELETE TAG</span>
             </button>
           )}
 
           <button
             onClick={() => setIsOpen(!isOpen)}
-            className="radar-key radar-key-cyan text-[10px] py-1"
+            className="radar-key text-[10px] py-0.5 px-2"
           >
-            <span>{isOpen ? 'COLLAPSE LOG' : 'EXPAND TELEPRINTER'}</span>
+            <span>{isOpen ? 'COLLAPSE LOG' : 'EXPAND LOG'}</span>
           </button>
         </div>
       </div>
 
-      {/* Expanded Military Teleprinter Log Table */}
+      {/* Expanded Table */}
       {isOpen && (
-        <div className="p-3 border-t border-[#003310] max-h-48 overflow-y-auto text-[10px] bg-[#010903]">
+        <div className="p-3 border-t border-[#d5c4a1] max-h-48 overflow-y-auto text-[10px] bg-[#fbf1c7]">
           <table className="w-full text-left">
             <thead>
-              <tr className="text-[#00aa33] border-b border-[#003310] uppercase">
-                <th className="pb-1">CALLSIGN / TARGET</th>
-                <th className="pb-1">DORSAL AZIMUTH</th>
-                <th className="pb-1">CONSTELLATION STATUS</th>
-                <th className="pb-1">BEACONS</th>
-                <th className="pb-1">VELOCITY (ACT / KF)</th>
+              <tr className="text-[#7c6f64] border-b border-[#d5c4a1] uppercase font-bold">
+                <th className="pb-1">TARGET TAG</th>
+                <th className="pb-1">HEADING</th>
+                <th className="pb-1">LOCK MODE</th>
+                <th className="pb-1">ANCHORS</th>
+                <th className="pb-1">SPEED (LIVE / EST)</th>
                 <th className="pb-1">GDOP</th>
-                <th className="pb-1">SPATIAL ERROR (Δ)</th>
-                <th className="pb-1">HARNESS STATE</th>
+                <th className="pb-1">ERROR</th>
+                <th className="pb-1">COLLAR</th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-[#00220a]">
+            <tbody className="divide-y divide-[#ebdbb2]">
               {tags.map((tag) => {
                 const res = results.find(r => r.tagId === tag.id);
                 return (
-                  <tr key={tag.id} className="text-[#00cc3a] hover:bg-[#00220a]">
-                    <td className="py-1 font-bold text-[#00f2fe]">
-                      [TRK] {tag.name.toUpperCase()}
+                  <tr key={tag.id} className="text-[#282828] hover:bg-[#f2e5bc]">
+                    <td className="py-1 font-bold text-[#076678]">
+                      {tag.name.toUpperCase()}
                     </td>
-                    <td className="py-1 text-[#00f2fe]">
+                    <td className="py-1 font-mono tabular-nums text-[#504945]">
                       {Math.round(tag.headingDeg ?? 90)}° {tag.compassData?.cardinal ?? 'E'}
                     </td>
                     <td className="py-1">
                       {res?.lockType === 'FULL_3D_LOCK' ? (
-                        <span className="text-[#00ff41] font-bold">
-                          [3D-LOCK: MULTILATERAL]
-                          {res.hypothesisFlipDetected && <span className="text-[#00f2fe] ml-1">(FLIP-RESOLVED)</span>}
+                        <span className="text-[#79740e] font-bold">
+                          3D Multilateration
                         </span>
                       ) : res?.lockType === 'DUAL_PINPOINT_LOCK' ? (
-                        <span className="text-[#00f2fe] font-bold">
-                          [2-BCN PINPOINT]
-                          {res.dualInfo && ` (MATCH +${res.dualInfo.candidate1VectorAlignment})`}
+                        <span className="text-[#076678] font-bold">
+                          2-Anchor Fusion
                         </span>
                       ) : res?.lockType === 'DUAL_KINEMATIC_LOCK' ? (
-                        <span className="text-[#ff9900]">
-                          [2-BCN KINEMATIC]
-                        </span>
-                      ) : res?.lockType === 'DUAL_AMBIGUOUS_CHORD' ? (
-                        <span className="text-[#ff9900]">
-                          [2-BCN CHORD CROSSING]
-                        </span>
-                      ) : res?.lockType === 'RADIAL_RING' ? (
-                        <span className="text-[#ff9900]">
-                          [1-BCN RADIAL RING]
+                        <span className="text-[#d65d0e] font-semibold">
+                          2-Anchor Lock
                         </span>
                       ) : (
-                        <span className="text-[#ff3b30] font-bold">
-                          [BLIND ZONE: 0 BEACONS]
+                        <span className="text-[#cc241d] font-bold">
+                          Signal Lost
                         </span>
                       )}
                     </td>
-                    <td className="py-1 text-[#00f2fe]">
-                      {res?.contributingAnchorIds.length || 0} BEACONS
+                    <td className="py-1 font-mono tabular-nums text-[#076678]">
+                      {res?.contributingAnchorIds.length || 0} Anchors
                     </td>
-                    <td className="py-1">
-                      <span className="text-[#00f2fe]">{tag.speedMps ?? res?.actualSpeedMps ?? 0}</span>
-                      <span className="text-[#007780]"> / </span>
-                      <span className="text-[#00ff41]">{res?.speedMps ?? 0} M/S</span>
+                    <td className="py-1 font-mono tabular-nums">
+                      <span className="text-[#076678]">{(tag.speedMps ?? res?.actualSpeedMps ?? 0).toFixed(1)}</span>
+                      <span className="text-[#bdae93]"> / </span>
+                      <span className="text-[#79740e]">{(res?.speedMps ?? 0).toFixed(1)} m/s</span>
                     </td>
-                    <td className="py-1">
+                    <td className="py-1 font-mono tabular-nums">
                       {res ? (
-                        <span className={res.gdop < 2.5 ? 'text-[#00ff41]' : res.gdop < 5 ? 'text-[#00f2fe]' : 'text-[#ff9900]'}>
-                          {res.gdop}
+                        <span className={res.gdop < 2.5 ? 'text-[#79740e]' : res.gdop < 5 ? 'text-[#076678]' : 'text-[#d65d0e]'}>
+                          {res.gdop.toFixed(2)}
                         </span>
                       ) : '—'}
                     </td>
-                    <td className="py-1 font-bold">
-                      {res?.lockType === 'FULL_3D_LOCK' ? (
-                        <span className={res.errorMeters < 3 ? 'text-[#00ff41]' : 'text-[#ff9900]'}>±{res.errorMeters} M</span>
-                      ) : res?.lockType === 'DUAL_PINPOINT_LOCK' ? (
-                        <span className="text-[#00f2fe]">PINPOINT: ±{res.errorMeters} M</span>
-                      ) : res?.lockType === 'DUAL_KINEMATIC_LOCK' ? (
-                        <span className="text-[#ff9900]">±{res.errorMeters} M</span>
-                      ) : res?.lockType === 'RADIAL_RING' ? (
-                        <span className="text-[#ff9900]">R ≈ {res.radialRing?.radiusMeters} M</span>
-                      ) : (
-                        <span className="text-[#ff3b30]">—</span>
-                      )}
+                    <td className="py-1 font-mono tabular-nums font-bold">
+                      {res ? (
+                        <span className={res.errorMeters < 3 ? 'text-[#79740e]' : 'text-[#d65d0e]'}>±{res.errorMeters.toFixed(1)} m</span>
+                      ) : '—'}
                     </td>
                     <td className="py-1">
-                      {tag.imuResting ? <span className="text-[#ff9900]">[DORMANT]</span> : <span className="text-[#00f2fe]">[PATROLLING]</span>}
+                      {tag.imuResting ? <span className="text-[#d65d0e]">Standby</span> : <span className="text-[#79740e]">Active</span>}
                     </td>
                   </tr>
                 );

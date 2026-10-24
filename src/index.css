@@ -1,27 +1,44 @@
 :root {
-  --radar-bg: #010602;
-  --radar-panel: rgba(2, 13, 5, 0.94);
-  --radar-panel-solid: #031006;
-  
-  /* Phosphor Tactical Vector Palette */
-  --radar-green: #00ff41;
-  --radar-green-mid: #00cc3a;
-  --radar-green-dim: #00551a;
-  --radar-green-faint: #003310;
+  /* Gruvbox Light Base Palette */
+  --radar-bg: #fbf1c7;            /* bg0: Warm parchment / paper canvas */
+  --radar-panel: rgba(242, 229, 188, 0.96); /* bg1: Elevated instrument panel */
+  --radar-panel-solid: #ebdbb2;   /* bg2: Solid container surface */
+  --radar-panel-card: #f9f5d7;    /* bg0_h: Bright card surface */
 
-  --radar-cyan: #00f2fe;
-  --radar-cyan-dim: #007780;
-  --radar-cyan-dark: #001f22;
+  /* Typography / Ink */
+  --radar-text: #282828;          /* dark0: Crisp dark charcoal primary ink */
+  --radar-text-dim: #7c6f64;      /* fg4: Warm slate secondary text */
+  --radar-text-faint: #928374;    /* gray: Captions / units */
 
-  --radar-orange: #ff9900;
-  --radar-orange-dim: #804c00;
-  --radar-orange-dark: #221400;
+  /* Structural Borders */
+  --radar-border: #d5c4a1;        /* bg3: High clarity boundary lines */
+  --radar-border-dark: #bdae93;   /* bg4: Strong borders */
+  --radar-border-light: #ebdbb2;  /* bg2: Subtle divider */
 
-  --radar-red: #ff3b30;
-  --radar-red-dim: #801d18;
-  --radar-red-dark: #220705;
+  /* Gruvbox Technical Accent Colors */
+  --radar-orange: #d65d0e;        /* Gruvbox dark orange / reticle */
+  --radar-orange-dim: #af3a03;
+  --radar-orange-light: #fe8019;
+  --radar-orange-bg: #fdeddc;
 
-  --font-mono: 'Share Tech Mono', 'Courier New', Courier, monospace, monospace;
+  --radar-green: #79740e;         /* Gruvbox olive green */
+  --radar-green-mid: #98971a;
+  --radar-green-dim: #b8bb26;
+  --radar-green-bg: #f4f6e4;
+
+  --radar-cyan: #458588;          /* Gruvbox blue/cyan for Primary Anchors */
+  --radar-cyan-dim: #076678;
+  --radar-cyan-bg: #e5f0f0;
+
+  --radar-yellow: #b57614;        /* Gruvbox yellow for Relay Anchors */
+  --radar-yellow-dim: #d79921;
+  --radar-yellow-bg: #fbf0d8;
+
+  --radar-red: #cc241d;           /* Gruvbox red for Wall Obstacles */
+  --radar-red-dim: #9d0006;
+  --radar-red-bg: #fae6e4;
+
+  --font-mono: 'JetBrains Mono', 'Share Tech Mono', 'Courier New', Courier, monospace;
 }
 
 * {
@@ -36,86 +53,55 @@ body, html, #root {
   height: 100%;
   overflow: hidden;
   background-color: var(--radar-bg);
-  color: var(--radar-green);
+  color: var(--radar-text);
   font-family: var(--font-mono);
   -webkit-font-smoothing: antialiased;
-  letter-spacing: 0.04em;
+  letter-spacing: 0.02em;
 }
 
-/* 1950s CRT Monitor Scanlines & Vignette Overlay */
+/* CRT Overlay Deactivated for Presentation Clarity */
 .crt-overlay {
-  position: absolute;
-  top: 0;
-  left: 0;
-  width: 100%;
-  height: 100%;
-  pointer-events: none;
-  z-index: 40;
-  background: 
-    linear-gradient(rgba(18, 16, 16, 0) 50%, rgba(0, 0, 0, 0.28) 50%),
-    radial-gradient(circle at center, transparent 65%, rgba(0, 10, 2, 0.6) 100%);
-  background-size: 100% 3px, 100% 100%;
-  opacity: 0.85;
+  display: none;
 }
 
-/* 1950s Military Instrument Chassis Panel */
+/* Gruvbox Light Instrument Chassis Panel */
 .radar-panel {
   background: var(--radar-panel);
-  border: 1px solid var(--radar-green-dim);
-  outline: 1px solid var(--radar-green-faint);
-  box-shadow: 0 0 18px rgba(0, 0, 0, 0.85), inset 0 0 12px rgba(0, 255, 65, 0.04);
+  border: 1px solid var(--radar-border);
+  border-radius: 4px;
+  box-shadow: 0 4px 14px rgba(60, 56, 54, 0.08), 0 1px 3px rgba(60, 56, 54, 0.06);
   position: relative;
+  backdrop-filter: blur(8px);
 }
 
-.radar-panel::before {
-  content: '✛';
-  position: absolute;
-  top: 4px;
-  left: 5px;
-  font-size: 10px;
-  line-height: 1;
-  color: var(--radar-green-dim);
-  pointer-events: none;
-}
-
-.radar-panel::after {
-  content: '✛';
-  position: absolute;
-  top: 4px;
-  right: 5px;
-  font-size: 10px;
-  line-height: 1;
-  color: var(--radar-green-dim);
-  pointer-events: none;
-}
-
-/* Phosphor Glow Utilities */
-.glow-green { text-shadow: 0 0 7px rgba(0, 255, 65, 0.65); }
-.glow-cyan { text-shadow: 0 0 7px rgba(0, 242, 254, 0.65); }
-.glow-orange { text-shadow: 0 0 7px rgba(255, 153, 0, 0.65); }
-.glow-red { text-shadow: 0 0 7px rgba(255, 59, 48, 0.65); }
+/* Subtle Text Highlights */
+.glow-green { color: var(--radar-green); font-weight: 700; }
+.glow-cyan { color: var(--radar-cyan-dim); font-weight: 700; }
+.glow-orange { color: var(--radar-orange); font-weight: 700; }
+.glow-red { color: var(--radar-red); font-weight: 700; }
 
 /* Tactical Color Helpers */
-.text-cyan { color: var(--radar-cyan); }
+.text-cyan { color: var(--radar-cyan-dim); }
 .text-green { color: var(--radar-green); }
 .text-orange { color: var(--radar-orange); }
 .text-red { color: var(--radar-red); }
 
-.border-cyan { border-color: var(--radar-cyan-dim); }
-.border-green { border-color: var(--radar-green-dim); }
-.border-orange { border-color: var(--radar-orange-dim); }
-.border-red { border-color: var(--radar-red-dim); }
+.border-cyan { border-color: var(--radar-cyan); }
+.border-green { border-color: var(--radar-green-mid); }
+.border-orange { border-color: var(--radar-orange); }
+.border-red { border-color: var(--radar-red); }
 
-/* Mechanical Push-Button Keys */
+/* Gruvbox Tactile Buttons */
 .radar-key {
   font-family: var(--font-mono);
   font-size: 11px;
   font-weight: 600;
   text-transform: uppercase;
   padding: 5px 9px;
-  border: 1px solid var(--radar-green-dim);
-  background: #020b04;
-  color: var(--radar-green-mid);
+  border: 1px solid var(--radar-border);
+  background: #fbf1c7;
+  color: var(--radar-text);
+  border-radius: 3px;
   cursor: pointer;
   display: inline-flex;
   align-items: center;
@@ -125,82 +111,107 @@ body, html, #root {
 }
 
 .radar-key:hover {
-  border-color: var(--radar-green);
-  color: var(--radar-green);
-  box-shadow: inset 0 0 6px rgba(0, 255, 65, 0.2);
+  border-color: var(--radar-border-dark);
+  background: #f2e5bc;
+  color: #282828;
 }
 
 .radar-key-active {
   background: var(--radar-green) !important;
-  color: #010602 !important;
+  color: #fbf1c7 !important;
   border-color: var(--radar-green) !important;
   font-weight: 700 !important;
-  box-shadow: 0 0 10px rgba(0, 255, 65, 0.7) !important;
+  box-shadow: 0 1px 4px rgba(121, 116, 14, 0.35) !important;
 }
 
-/* Tactical Color Key Variants */
+/* Key Variants */
 .radar-key-cyan {
-  border-color: var(--radar-cyan-dim);
-  color: var(--radar-cyan);
-  background: #001214;
+  border-color: #bdae93;
+  color: #076678;
+  background: #ebf2f2;
 }
 .radar-key-cyan:hover {
-  border-color: var(--radar-cyan);
-  box-shadow: inset 0 0 6px rgba(0, 242, 254, 0.25);
+  border-color: #076678;
+  background: #dfebeb;
 }
 .radar-key-cyan.radar-key-active {
-  background: var(--radar-cyan) !important;
-  color: #010602 !important;
-  border-color: var(--radar-cyan) !important;
-  box-shadow: 0 0 10px rgba(0, 242, 254, 0.7) !important;
+  background: #458588 !important;
+  color: #fbf1c7 !important;
+  border-color: #076678 !important;
+  box-shadow: 0 1px 4px rgba(7, 102, 120, 0.35) !important;
 }
 
 .radar-key-orange {
-  border-color: var(--radar-orange-dim);
-  color: var(--radar-orange);
-  background: #140b00;
+  border-color: #d5c4a1;
+  color: #af3a03;
+  background: #fdeddc;
 }
 .radar-key-orange:hover {
-  border-color: var(--radar-orange);
-  box-shadow: inset 0 0 6px rgba(255, 153, 0, 0.25);
+  border-color: #d65d0e;
+  background: #fae0c8;
 }
 .radar-key-orange.radar-key-active {
-  background: var(--radar-orange) !important;
-  color: #010602 !important;
-  border-color: var(--radar-orange) !important;
-  box-shadow: 0 0 10px rgba(255, 153, 0, 0.7) !important;
+  background: #d65d0e !important;
+  color: #fbf1c7 !important;
+  border-color: #af3a03 !important;
+  box-shadow: 0 1px 4px rgba(214, 93, 14, 0.35) !important;
+}
+
+.radar-key-green {
+  border-color: #bdae93;
+  color: #79740e;
+  background: #f4f6e4;
+}
+.radar-key-green:hover {
+  border-color: #79740e;
+  background: #eaedd0;
+}
+.radar-key-green.radar-key-active {
+  background: #79740e !important;
+  color: #fbf1c7 !important;
+  border-color: #555106 !important;
+  box-shadow: 0 1px 4px rgba(121, 116, 14, 0.35) !important;
 }
 
 .radar-key-red {
-  border-color: var(--radar-red-dim);
-  color: var(--radar-red);
-  background: #140504;
+  border-color: #d5c4a1;
+  color: #9d0006;
+  background: #fae6e4;
 }
 .radar-key-red:hover {
-  border-color: var(--radar-red);
-  box-shadow: inset 0 0 6px rgba(255, 59, 48, 0.25);
+  border-color: #cc241d;
+  background: #f5cfcc;
 }
 .radar-key-red.radar-key-active {
-  background: var(--radar-red) !important;
+  background: #cc241d !important;
   color: #ffffff !important;
-  border-color: var(--radar-red) !important;
-  box-shadow: 0 0 10px rgba(255, 59, 48, 0.7) !important;
+  border-color: #9d0006 !important;
+  box-shadow: 0 1px 4px rgba(204, 36, 29, 0.35) !important;
 }
 
-/* Stamped Metal Section Header */
+/* Stamped Instrument Section Header */
 .panel-stamped-header {
-  border-bottom: 1px solid var(--radar-green-dim);
-  background: rgba(0, 40, 12, 0.4);
+  border-bottom: 1px solid var(--radar-border);
+  background: var(--radar-panel-solid);
   padding: 8px 12px;
   display: flex;
   align-items: center;
   justify-content: space-between;
+  border-top-left-radius: 3px;
+  border-top-right-radius: 3px;
+}
+
+/* Tabular Numbers to eliminate number width jitter */
+.tabular-nums {
+  font-variant-numeric: tabular-nums;
+  font-feature-settings: "tnum";
 }
 
 /* Flex & Layout Utilities */
 .flex { display: flex; }
 .inline-flex { display: inline-flex; }
 .items-center { align-items: center; }
+.items-baseline { align-items: baseline; }
 .justify-between { justify-content: space-between; }
 .justify-center { justify-content: center; }
 .gap-1 { gap: 0.25rem; }
@@ -280,13 +291,15 @@ body, html, #root {
 .pl-3 { padding-left: 0.75rem; }
 .pl-4 { padding-left: 1rem; }
 .pr-4 { padding-right: 1rem; }
+.my-auto { margin-top: auto; margin-bottom: auto; }
+.ml-auto { margin-left: auto; }
 
 /* Borders */
-.border { border: 1px solid var(--radar-green-dim); }
-.border-b { border-bottom: 1px solid var(--radar-green-dim); }
-.border-t { border-top: 1px solid var(--radar-green-dim); }
-.border-l { border-left: 1px solid var(--radar-green-dim); }
-.border-r { border-right: 1px solid var(--radar-green-dim); }
+.border { border: 1px solid var(--radar-border); }
+.border-b { border-bottom: 1px solid var(--radar-border); }
+.border-t { border-top: 1px solid var(--radar-border); }
+.border-l { border-left: 1px solid var(--radar-border); }
+.border-r { border-right: 1px solid var(--radar-border); }
 
 /* Typography */
 .font-mono { font-family: var(--font-mono); }
@@ -295,6 +308,7 @@ body, html, #root {
 .uppercase { text-transform: uppercase; }
 .tracking-wider { letter-spacing: 0.08em; }
 .tracking-widest { letter-spacing: 0.12em; }
+.tracking-tight { letter-spacing: -0.02em; }
 .text-\[8px\] { font-size: 8px; }
 .text-\[9px\] { font-size: 9px; }
 .text-\[10px\] { font-size: 10px; }
@@ -305,19 +319,20 @@ body, html, #root {
 .text-xl { font-size: 1.25rem; }
 .text-2xl { font-size: 1.5rem; }
 .text-right { text-align: right; }
+.text-center { text-align: center; }
 
 /* Cursor & Interactions */
 .cursor-pointer { cursor: pointer; }
 .cursor-crosshair { cursor: crosshair; }
 
-/* Potentiometer Sliders - Default Green */
+/* Precision Sliders */
 input[type="range"] {
   -webkit-appearance: none;
   appearance: none;
   width: 100%;
   height: 6px;
-  background: #020f05;
-  border: 1px solid var(--radar-green-dim);
+  background: #d5c4a1;
+  border-radius: 3px;
   outline: none;
   cursor: pointer;
   margin: 6px 0;
@@ -329,54 +344,39 @@ input[type="range"]::-webkit-slider-thumb {
   width: 16px;
   height: 16px;
   background: var(--radar-green);
-  border: 1px solid #000000;
-  box-shadow: 0 0 8px var(--radar-green);
+  border: 2px solid #ebdbb2;
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.2);
   cursor: ew-resize;
-  border-radius: 0;
+  border-radius: 50%;
 }
 
-/* Color-Specific Potentiometers */
-input[type="range"].slider-cyan {
-  border-color: var(--radar-cyan-dim);
-  background: #001214;
-}
 input[type="range"].slider-cyan::-webkit-slider-thumb {
   background: var(--radar-cyan);
-  box-shadow: 0 0 8px var(--radar-cyan);
 }
 
-input[type="range"].slider-orange {
-  border-color: var(--radar-orange-dim);
-  background: #140b00;
-}
 input[type="range"].slider-orange::-webkit-slider-thumb {
   background: var(--radar-orange);
-  box-shadow: 0 0 8px var(--radar-orange);
 }
 
-input[type="range"].slider-red {
-  border-color: var(--radar-red-dim);
-  background: #140504;
-}
 input[type="range"].slider-red::-webkit-slider-thumb {
   background: var(--radar-red);
-  box-shadow: 0 0 8px var(--radar-red);
 }
 
-/* Vintage Scrollbar */
+/* Scrollbars */
 ::-webkit-scrollbar {
   width: 6px;
   height: 6px;
 }
 ::-webkit-scrollbar-track {
-  background: #020a03;
-  border: 1px solid var(--radar-green-faint);
+  background: #f2e5bc;
+  border: 1px solid #d5c4a1;
 }
 ::-webkit-scrollbar-thumb {
-  background: var(--radar-green-dim);
+  background: #bdae93;
+  border-radius: 3px;
 }
 ::-webkit-scrollbar-thumb:hover {
-  background: var(--radar-green);
+  background: #7c6f64;
 }
 
 button {

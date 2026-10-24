@@ -33,8 +33,8 @@ export function calculateSignalMeasurement(
   const pixelDist = distance(tagPos, stopPos);
   const trueDistanceMeters = pixelDist / config.pixelsPerMeter;
 
-  // Get active radius for this GeoStop tier
-  const maxRadiusMeters = stop.tier === 1 ? config.tier1RadiusMeters : config.tier2RadiusMeters;
+  // Get active radius for this UWB Anchor
+  const maxRadiusMeters = config.anchorRadiusMeters ?? (stop.tier === 1 ? config.tier1RadiusMeters : config.tier2RadiusMeters) ?? 90;
 
   // If outside physical radio horizon
   if (trueDistanceMeters > maxRadiusMeters) {
